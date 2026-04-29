@@ -1,0 +1,17 @@
+{
+  "name": "rbx-bot",
+  "version": "2.0.0",
+  "description": "RBX-BOT integrado — Roblox Updates + Redux Studios",
+  "main": "index.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "cheerio": "^1.0.0",
+    "discord.js": "^14.25.1",
+    "dotenv": "^16.4.5",
+    "express": "^5.2.1",
+    "node-fetch": "^2.7.0"
+  }
+}
