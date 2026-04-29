@@ -1,0 +1,15 @@
+# Environment variables
+.env
+
+# Node modules
+node_modules
+
+# Local data files
+config.json
+status_all.json
+xp_data.json
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
