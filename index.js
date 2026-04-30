@@ -402,6 +402,12 @@ client.once("ready", async () => {
 
 // ===================== XP POR MENSAGEM + IA NO PV =====================
 client.on("messageCreate", async (message) => {
+  console.log(`[MSG RAW] guild=${message.guildId ?? "DM"} | autor=${message.author?.tag} | bot=${message.author?.bot} | partial=${message.partial}`);
+
+  if (message.partial) {
+    try { await message.fetch(); } catch { return; }
+  }
+
   if (message.author.bot) return;
 
   // ── IA no PV ──
