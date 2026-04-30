@@ -7,7 +7,7 @@
   },
   "Windows Free": {
     "Ronix": "(STATUS :green_circle:)(UNCs :green_circle:)",
-    "Bunni": "(STATUS :red_circle:)(UNCs :red_circle:)",
+    "Bunni": "(STATUS :green_circle:)(UNCs :red_circle:)",
     "Velocity": "(STATUS :green_circle:)(UNCs :green_circle:)",
     "RBXexploit": "(STATUS :green_circle:)(UNCs :green_circle:)",
     "Xeno": "(STATUS :green_circle:)(UNCs :green_circle:)",
