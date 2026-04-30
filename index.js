@@ -6,6 +6,7 @@ require("dotenv").config();
 const {
   Client,
   GatewayIntentBits,
+  Partials,
   EmbedBuilder,
   ActionRowBuilder,
   ButtonBuilder,
@@ -100,7 +101,7 @@ const client = new Client({
     GatewayIntentBits.DirectMessages,
     GatewayIntentBits.DirectMessageTyping,
   ],
-  partials: ["CHANNEL"],
+  partials: [Partials.Channel, Partials.Message],
 });
 
 client.commands = new Collection();
@@ -405,7 +406,11 @@ client.on("messageCreate", async (message) => {
 
   // ── IA no PV ──
   if (!message.guild) {
-    if (!ANTHROPIC_API_KEY) return; // IA desativada se sem chave
+    console.log(`[DM] Mensagem recebida de ${message.author.tag}: ${message.content}`);
+    if (!ANTHROPIC_API_KEY) {
+      console.warn("[DM] ANTHROPIC_API_KEY não definida — ignorando.");
+      return;
+    }
 
     const userId = message.author.id;
     const userInput = message.content.trim();
