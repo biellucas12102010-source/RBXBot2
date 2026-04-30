@@ -1,0 +1,75 @@
+{
+  "States Exemple": {
+    ":green_circle: = Working": "Working",
+    ":red_circle: = NotWorking(DOWN)": "NotWorking(DOWN)",
+    ":blue_circle: = SoonComming": "SoonComming",
+    ":yellow_circle: = Updating": "Updating"
+  },
+  "Windows Free": {
+    "Ronix": "(STATUS :green_circle:)(UNCs :green_circle:)",
+    "Bunni": "(STATUS :red_circle:)(UNCs :red_circle:)",
+    "Velocity": "(STATUS :green_circle:)(UNCs :green_circle:)",
+    "RBXexploit": "(STATUS :green_circle:)(UNCs :green_circle:)",
+    "Xeno": "(STATUS :green_circle:)(UNCs :green_circle:)",
+    "Solara": "(STATUS :green_circle:)(UNCs :green_circle:)",
+    "Redux": "(STATUS :red_circle:)(UNCs :red_circle:)",
+    "Valex": "(STATUS :red_circle:)(UNCs :red_circle:)",
+    "Swift": "(STATUS :red_circle:)(UNCs :red_circle:)",
+    "Isaeva": "(STATUS :red_circle:)(UNCs :red_circle:)",
+    "DriftEXEC": "(STATUS :red_circle:)(UNCs :red_circle:)",
+    "Evon": "(STATUS :green_circle:)(UNCs :green_circle:)",
+    "Comet": "(STATUS :green_circle:)(UNCs :green_circle:)"
+  },
+  "Windows Paid": {
+    "Volcano": "(STATUS :red_circle:)(UNCs :red_circle:) 5.97$",
+    "Wave": "(STATUS :green_circle:)(UNCs :green_circle:) 3.99$",
+    "Seliware": "(STATUS :green_circle:)(UNCs :green_circle:) 3.99$",
+    "Potassiun": "(STATUS :green_circle:)(UNCs :green_circle:) 24.99$",
+    "SirHurt": "(STATUS :red_circle:)(UNCs :red_circle:) 2.80$",
+    "Volt": "(STATUS :green_circle:)(UNCs :green_circle:) 7.99$",
+    "ChocoSploit": "(STATUS :red_circle:)(UNCs :red_circle:) 10.00$",
+    "Script-Ware": "(STATUS :green_circle:)(UNCs :green_circle:)",
+    "Synapse Z": "(STATUS :green_circle:)(UNCs :green_circle:)"
+  },
+  "External Free": {
+    "ValexExternal": "(STATUS :red_circle:)(UNCs :red_circle:)",
+    "DriftEXT": "(STATUS :green_circle:)(UNCs :green_circle:)",
+    "Solara": "(STATUS :green_circle:)(UNCs :green_circle:)",
+    "Xeno": "(STATUS :green_circle:)(UNCs :green_circle:)",
+    "AWP": "(STATUS :green_circle:)(UNCs :green_circle:)"
+  },
+  "External Paid": {
+    "Matcha": "(STATUS :green_circle:)(UNCs :green_circle:) 11.99$",
+    "Sereve": "(STATUS :green_circle:)(UNCs :green_circle:) 20.00$",
+    "RbxCli": "(STATUS :green_circle:)(UNCs :green_circle:) 11.99$",
+    "Ronin": "(STATUS :red_circle:)(UNCs :red_circle:) 7.99$",
+    "Melatonin": "(STATUS :red_circle:)(UNCs :red_circle:) 9.99$",
+    "Isabelle": "(STATUS :red_circle:)(UNCs :red_circle:) 7.99$",
+    "Photon": "(STATUS :green_circle:)(UNCs :green_circle:) 20.00$",
+    "Serotonin": "(STATUS :red_circle:)(UNCs :red_circle:) 9.49$",
+    "Matrix Hub": "(STATUS :green_circle:)(UNCs :green_circle:) 4.99$",
+    "DX9WARE": "(STATUS :green_circle:)(UNCs :green_circle:) 3.25$"
+  },
+  "MacOS": {
+    "Hydrogen": "(STATUS :green_circle:)(UNCs :green_circle:)",
+    "Bunni": "(STATUS :red_circle:)(UNCs :red_circle:)",
+    "Macsploit": "(STATUS :green_circle:)(UNCs :green_circle:)",
+    "cryptic": "(STATUS :red_circle:)(UNCs :red_circle:)",
+    "Ronix": "(STATUS :yellow_circle:)(UNCs :green_circle:)",
+    "Isaeva": "(STATUS :blue_circle:)(UNCs :blue_circle:)"
+  },
+  "Android": {
+    "1°Delta": "(STATUS :green_circle:)(UNCs :green_circle:)",
+    "2°Cryptic": "(STATUS :green_circle:)(UNCs :green_circle:)",
+    "3°VegaX": "(STATUS :green_circle:)(UNCs :green_circle:)",
+    "4°Codex": "(STATUS :green_circle:)(UNCs :green_circle:)"
+  },
+  "iOS Free": {
+    "1°Delta": "(STATUS :green_circle:)(UNCs :green_circle:)",
+    "2°Cryptic": "(STATUS :green_circle:)(UNCs :green_circle:)",
+    "3°Ronix": "(STATUS :red_circle:)(UNCs :red_circle:)"
+  },
+  "iOS Paid": {
+    "1°Ronix": "(STATUS :red_circle:)(UNCs :red_circle:) 4.00$"
+  }
+}

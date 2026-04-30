@@ -1,0 +1,15 @@
+{
+  "1109671454116687872": {
+    "updateChannel": "1470096336303947878",
+    "platformsDisabled": [],
+    "roles": [],
+    "futureUpdate": false,
+    "lastVersions": {
+      "Windows": "version-acc4b74f79e743b9",
+      "Mac": "version-1d604bb8b63849b4",
+      "Android": "2.718.1110",
+      "iOS": "2.718.1110"
+    },
+    "lastFutureVersions": {}
+  }
+}
