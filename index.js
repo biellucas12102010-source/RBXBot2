@@ -114,7 +114,7 @@ async function loadXP() {
 async function saveXP(data) {
   await fsPromise.writeFile(XP_FILE, JSON.stringify(data, null, 4), "utf-8");
 }
-function xpNeeded(level) { return 20 + (level - 1) * 5; }
+function xpNeeded(level) { return level <= 1 ? 20 : 20 + (level - 1) * 5; }
 
 // ===================== STATUS HELPERS =====================
 async function loadStatus() {
@@ -499,10 +499,22 @@ client.on("interactionCreate", async (interaction) => {
   // ── CHAT COMMANDS ──
   if (interaction.isChatInputCommand()) {
     const { commandName } = interaction;
+
+    // Ignorar interações fora de servidores (DMs causam crash aqui)
+    if (!interaction.guild) {
+      return interaction.reply({ content: "❌ Este comando só funciona em servidores.", ephemeral: true });
+    }
+
     const guildCfg = getGuildConfig(interaction.guild.id);
 
     // ─── manage-notification ───
     if (commandName === "manage-notification") {
+      const MANAGE_ROLE = "1109671454473203738";
+      const isOwner = interaction.guild.ownerId === interaction.user.id;
+      const hasRole = interaction.member.roles.cache.has(MANAGE_ROLE);
+      if (!isOwner && !hasRole)
+        return interaction.reply({ content: "❌ Sem permissão.", ephemeral: true });
+
       const cfg = guildCfg;
       const embed = new EmbedBuilder()
         .setTitle("Gerenciar Notificações do Roblox")
@@ -604,6 +616,12 @@ client.on("interactionCreate", async (interaction) => {
 
     // ─── update-roblox ───
     if (commandName === "update-roblox") {
+      const UPDRBX_ROLE = "1109671454473203738";
+      const isOwner = interaction.guild.ownerId === interaction.user.id;
+      const hasRole = interaction.member.roles.cache.has(UPDRBX_ROLE);
+      if (!isOwner && !hasRole)
+        return interaction.reply({ content: "❌ Sem permissão.", ephemeral: true });
+
       await interaction.deferReply();
       const platform     = interaction.options.getString("platform");
       const type         = interaction.options.getString("type") || "current";
@@ -653,26 +671,40 @@ client.on("interactionCreate", async (interaction) => {
         .setThumbnail(ROBLOX_LOGO)
         .setTimestamp();
 
-      await interaction.channel.send({
-        content: mention,
-        embeds: [embed],
-        allowedMentions: { parse: ["everyone", "roles"] },
-      });
-      await interaction.editReply({ content: "✅ Update enviado!", });
-      return;
+      try {
+        await interaction.channel.send({
+          content: mention,
+          embeds: [embed],
+          allowedMentions: { parse: ["everyone", "roles"] },
+        });
+        return interaction.editReply({ content: "✅ Update enviado!" });
+      } catch (err) {
+        console.error("[/update-roblox ERROR]", err);
+        return interaction.editReply({ content: `❌ Erro ao enviar update: \`${err.message}\`` });
+      }
     }
 
     // ─── reset ───
     if (commandName === "reset") {
-      await interaction.deferReply();
-      const texto = [
-        `<@&${EXECUTORS_ROLE_ID}>\n\nWindows EXECUTORS STATES (free)\n\`\`\`\n[>] Xeno(ONLINE🟢)(UNDETECTED🟢)\n[>] Solara(ONLINE🟢)(UNDETECTED🟢)\n\`\`\``,
-        "Windows EXTERNAL STATES (free)\n```\n[>] DriftEXT(ONLINE🟢)(UNDETECTED🟢)\n```",
-        "MacOS / Android / iOS\n```\n[>] 1°Delta(ONLINE🟢)(UNDETECTED🟢)\n[>] Hydrogen(ONLINE🟢)(UNDETECTED🟢)\n```",
-      ];
-      for (const t of texto) await interaction.channel.send(t);
-      await interaction.followUp({ content: "✅ Reset enviado.", ephemeral: true });
-      return;
+      const RESET_ROLE = "1109671454473203738";
+      const isOwner = interaction.guild.ownerId === interaction.user.id;
+      const hasRole = interaction.member.roles.cache.has(RESET_ROLE);
+      if (!isOwner && !hasRole)
+        return interaction.reply({ content: "❌ Sem permissão.", ephemeral: true });
+
+      await interaction.deferReply({ ephemeral: true });
+      try {
+        const texto = [
+          `<@&${EXECUTORS_ROLE_ID}>\n\nWindows EXECUTORS STATES (free)\n\`\`\`\n[>] Xeno(ONLINE🟢)(UNDETECTED🟢)\n[>] Solara(ONLINE🟢)(UNDETECTED🟢)\n\`\`\``,
+          "Windows EXTERNAL STATES (free)\n```\n[>] DriftEXT(ONLINE🟢)(UNDETECTED🟢)\n```",
+          "MacOS / Android / iOS\n```\n[>] 1°Delta(ONLINE🟢)(UNDETECTED🟢)\n[>] Hydrogen(ONLINE🟢)(UNDETECTED🟢)\n```",
+        ];
+        for (const t of texto) await interaction.channel.send(t);
+        return interaction.editReply({ content: "✅ Reset enviado." });
+      } catch (err) {
+        console.error("[/reset ERROR]", err);
+        return interaction.editReply({ content: `❌ Erro ao enviar reset: \`${err.message}\`` });
+      }
     }
 
     // ─── dashboard ───
@@ -698,8 +730,11 @@ client.on("interactionCreate", async (interaction) => {
 
     // ─── XP commands ───
     if (commandName === "addxp") {
-      if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator))
-        return interaction.reply({ content: "❌ Permissão negada.", ephemeral: true });
+      const ADDXP_ROLE = "1109671454473203738";
+      const isOwner = interaction.guild.ownerId === interaction.user.id;
+      const hasRole = interaction.member.roles.cache.has(ADDXP_ROLE);
+      if (!isOwner && !hasRole)
+        return interaction.reply({ content: "❌ Sem permissão.", ephemeral: true });
       const user = interaction.options.getUser("user");
       const amt  = interaction.options.getInteger("amount");
       const data = await loadXP();
@@ -711,8 +746,11 @@ client.on("interactionCreate", async (interaction) => {
     }
 
     if (commandName === "setlevel") {
-      if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator))
-        return interaction.reply({ content: "❌ Permissão negada.", ephemeral: true });
+      const SETLEVEL_ROLE = "1109671454473203738";
+      const isOwner = interaction.guild.ownerId === interaction.user.id;
+      const hasRole = interaction.member.roles.cache.has(SETLEVEL_ROLE);
+      if (!isOwner && !hasRole)
+        return interaction.reply({ content: "❌ Sem permissão.", ephemeral: true });
       const user  = interaction.options.getUser("user");
       const level = interaction.options.getInteger("level");
       const data  = await loadXP();
@@ -722,8 +760,11 @@ client.on("interactionCreate", async (interaction) => {
     }
 
     if (commandName === "removexp") {
-      if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator))
-        return interaction.reply({ content: "❌ Permissão negada.", ephemeral: true });
+      const REMOVEXP_ROLE = "1109671454473203738";
+      const isOwner = interaction.guild.ownerId === interaction.user.id;
+      const hasRole = interaction.member.roles.cache.has(REMOVEXP_ROLE);
+      if (!isOwner && !hasRole)
+        return interaction.reply({ content: "❌ Sem permissão.", ephemeral: true });
       const user = interaction.options.getUser("user");
       const amt  = interaction.options.getInteger("amount");
       const data = await loadXP();
@@ -749,7 +790,10 @@ client.on("interactionCreate", async (interaction) => {
     }
 
     if (commandName === "xp_add") {
-      if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator))
+      const XP_ADD_ROLE = "1109671454473203738";
+      const isOwner = interaction.guild.ownerId === interaction.user.id;
+      const hasRole = interaction.member.roles.cache.has(XP_ADD_ROLE);
+      if (!isOwner && !hasRole)
         return interaction.reply({ content: "❌ Sem permissão.", ephemeral: true });
       const user  = interaction.options.getUser("user");
       const value = interaction.options.getInteger("value");
@@ -763,7 +807,10 @@ client.on("interactionCreate", async (interaction) => {
     }
 
     if (commandName === "xp_set") {
-      if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator))
+      const XP_SET_ROLE = "1109671454473203738";
+      const isOwner = interaction.guild.ownerId === interaction.user.id;
+      const hasRole = interaction.member.roles.cache.has(XP_SET_ROLE);
+      if (!isOwner && !hasRole)
         return interaction.reply({ content: "❌ Sem permissão.", ephemeral: true });
       const user  = interaction.options.getUser("user");
       const value = interaction.options.getInteger("value");
@@ -775,7 +822,10 @@ client.on("interactionCreate", async (interaction) => {
     }
 
     if (commandName === "xp_remove") {
-      if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator))
+      const XP_REM_ROLE = "1109671454473203738";
+      const isOwner = interaction.guild.ownerId === interaction.user.id;
+      const hasRole = interaction.member.roles.cache.has(XP_REM_ROLE);
+      if (!isOwner && !hasRole)
         return interaction.reply({ content: "❌ Sem permissão.", ephemeral: true });
       const user  = interaction.options.getUser("user");
       const value = interaction.options.getInteger("value");
@@ -789,7 +839,10 @@ client.on("interactionCreate", async (interaction) => {
 
     // ─── sync ───
     if (commandName === "sync") {
-      if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator))
+      const SYNC_ROLE = "1109671454473203738";
+      const isOwner = interaction.guild.ownerId === interaction.user.id;
+      const hasRole = interaction.member.roles.cache.has(SYNC_ROLE);
+      if (!isOwner && !hasRole)
         return interaction.reply({ content: "❌ Sem permissão.", ephemeral: true });
       try {
         await rest.put(Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID), { body: commandDefs });
@@ -832,8 +885,18 @@ client.on("interactionCreate", async (interaction) => {
       await interaction.deferReply({ ephemeral: true });
       const data  = await loadStatus();
       const embed = new EmbedBuilder().setTitle("Status dos Executores REDUX").setColor(0x0000FF);
-      for (const [nome, sts] of Object.entries(data))
-        embed.addFields({ name: nome, value: String(sts), inline: false });
+      let fieldCount = 0;
+      for (const [categoria, executores] of Object.entries(data)) {
+        if (fieldCount >= 25) break; // Discord limita 25 fields por embed
+        if (typeof executores === "object" && executores !== null) {
+          const texto = Object.entries(executores).map(([n, s]) => `• ${n}: ${s}`).join("\n") || "Nenhum";
+          embed.addFields({ name: categoria, value: texto.length > 1024 ? texto.substring(0, 1020) + "..." : texto, inline: false });
+        } else {
+          embed.addFields({ name: categoria, value: String(executores), inline: false });
+        }
+        fieldCount++;
+      }
+      if (fieldCount === 0) embed.setDescription("Nenhum status disponível.");
       return interaction.editReply({ embeds: [embed] });
     }
 
@@ -842,10 +905,18 @@ client.on("interactionCreate", async (interaction) => {
       await interaction.deferReply({ ephemeral: true });
       const data  = await loadStatus();
       const embed = new EmbedBuilder().setTitle("Status dos Sistemas REDUX").setColor(0xFFA500);
-      if (!Object.keys(data).length) embed.setDescription("Nenhum status carregado ainda.");
-      else for (const [sistema, sts] of Object.entries(data)) {
-        const emoji = String(sts).toUpperCase().includes("ON") ? "🟢" : "🔴";
-        embed.addFields({ name: sistema, value: `${sts} ${emoji}`, inline: false });
+      if (!Object.keys(data).length) {
+        embed.setDescription("Nenhum status carregado ainda.");
+      } else {
+        let fieldCount = 0;
+        for (const [sistema, sts] of Object.entries(data)) {
+          if (fieldCount >= 25) break;
+          const stsStr = typeof sts === "object" ? JSON.stringify(sts) : String(sts);
+          const emoji = stsStr.toUpperCase().includes("ON") ? "🟢" : "🔴";
+          const value = stsStr.length > 1024 ? stsStr.substring(0, 1020) + "..." : stsStr;
+          embed.addFields({ name: sistema, value: `${value} ${emoji}`, inline: false });
+          fieldCount++;
+        }
       }
       return interaction.editReply({ embeds: [embed] });
     }
@@ -866,77 +937,96 @@ client.on("interactionCreate", async (interaction) => {
 
     // ─── cleaner ───
     if (commandName === "cleaner") {
-      if (!interaction.member.permissions.has(PermissionsBitField.Flags.ManageMessages))
-        return interaction.reply({ content: "❌ Você não tem permissão.", ephemeral: true });
+      const CLEANER_ROLE = "1109671454473203738";
+      const isOwner = interaction.guild.ownerId === interaction.user.id;
+      const hasRole = interaction.member.roles.cache.has(CLEANER_ROLE);
+      if (!isOwner && !hasRole)
+        return interaction.reply({ content: "❌ Sem permissão.", ephemeral: true });
       const qty = Math.min(Math.max(interaction.options.getInteger("quantidade") || 100, 1), 1000);
       await interaction.deferReply({ ephemeral: true });
       try {
         const msgs  = await interaction.channel.bulkDelete(qty, true);
         try { await interaction.user.send(`🧹 **Limpeza concluída!** Canal: **#${interaction.channel.name}** — ${msgs.size} mensagens apagadas.`); } catch {}
-        return interaction.followUp({ content: `✅ ${msgs.size} mensagens apagadas.`, ephemeral: true });
+        return interaction.editReply({ content: `✅ ${msgs.size} mensagens apagadas.` });
       } catch (e) {
-        return interaction.followUp({ content: `❌ Erro: \`${e}\``, ephemeral: true });
+        console.error("[/cleaner ERROR]", e);
+        return interaction.editReply({ content: `❌ Erro: \`${e}\`` });
       }
     }
 
     // ─── reduxstatesexecutor ───
     if (commandName === "reduxstatesexecutor") {
-      if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator))
+      const REDUX_ROLE = "1109671454473203738";
+      const isOwner = interaction.guild.ownerId === interaction.user.id;
+      const hasRole = interaction.member.roles.cache.has(REDUX_ROLE);
+      if (!isOwner && !hasRole)
         return interaction.reply({ content: "❌ Sem permissão.", ephemeral: true });
       await interaction.deferReply({ ephemeral: true });
       try {
         client.statusMessage = null;
         await updateReduxStatusEmbed();
-        return interaction.followUp({ content: "✅ Mensagem de status gerada.", ephemeral: true });
+        return interaction.editReply({ content: "✅ Mensagem de status gerada." });
       } catch (e) {
-        return interaction.followUp({ content: `❌ Erro: \`${e}\``, ephemeral: true });
+        console.error("[/reduxstatesexecutor ERROR]", e);
+        return interaction.editReply({ content: `❌ Erro: \`${e}\`` });
       }
     }
 
     // ─── logapp ───
     if (commandName === "logapp") {
+      const LOGAPP_ROLE = "1109671454473203738";
+      const isOwner = interaction.guild.ownerId === interaction.user.id;
+      const hasRole = interaction.member.roles.cache.has(LOGAPP_ROLE);
+      if (!isOwner && !hasRole)
+        return interaction.reply({ content: "❌ Sem permissão.", ephemeral: true });
+
       await interaction.deferReply({ ephemeral: true });
-      const tipo           = interaction.options.getString("tipo");
-      const titulo         = interaction.options.getString("titulo");
-      let   utility        = (interaction.options.getString("utility") || "").replace(/-/g, " ");
-      const emojiSituation = interaction.options.getString("emojisituation") || "📰";
-      const situation      = interaction.options.getString("situation");
-      const log            = interaction.options.getString("log");
-      const subtitle       = interaction.options.getString("subtitle");
-      const channelMention = interaction.options.getChannel("channelmention");
-      const downloadMsg    = interaction.options.getString("downloadmessage");
-      const downloadLink   = interaction.options.getString("downloadlink");
-      const image          = interaction.options.getAttachment("image");
+      try {
+        const tipo           = interaction.options.getString("tipo");
+        const titulo         = interaction.options.getString("titulo");
+        let   utility        = (interaction.options.getString("utility") || "").replace(/-/g, " ");
+        const emojiSituation = interaction.options.getString("emojisituation") || "📰";
+        const situation      = interaction.options.getString("situation");
+        const log            = interaction.options.getString("log");
+        const subtitle       = interaction.options.getString("subtitle");
+        const channelMention = interaction.options.getChannel("channelmention");
+        const downloadMsg    = interaction.options.getString("downloadmessage");
+        const downloadLink   = interaction.options.getString("downloadlink");
+        const image          = interaction.options.getAttachment("image");
 
-      const partes   = log.split("|").map(p => p.trim()).filter(p => p.length > 0);
-      let textoLog   = partes.map(p => p === "-" ? "\n" : `🔹 ${p}`).join("\n").trimEnd();
-      const situationTitle = tipo === "utility" ? (situation || "Changelog") : (situation || "Situação");
+        const partes   = log.split("|").map(p => p.trim()).filter(p => p.length > 0);
+        let textoLog   = partes.map(p => p === "-" ? "\n" : `🔹 ${p}`).join("\n").trimEnd();
+        const situationTitle = tipo === "utility" ? (situation || "Changelog") : (situation || "Situação");
 
-      const embed = new EmbedBuilder()
-        .setTitle(`📢 Redux ${tipo === "utility" ? "Utility" : "Annunciaments"} Log`)
-        .setColor(0x0000FF)
-        .setDescription(`**${emojiSituation} ${situationTitle}**\n\n${textoLog}`)
-        .addFields({ name: `🔄️ ${titulo}`, value: utility || "\u200b", inline: false });
+        const embed = new EmbedBuilder()
+          .setTitle(`📢 Redux ${tipo === "utility" ? "Utility" : "Annunciaments"} Log`)
+          .setColor(0x0000FF)
+          .setDescription(`**${emojiSituation} ${situationTitle}**\n\n${textoLog}`)
+          .addFields({ name: `🔄️ ${titulo}`, value: utility || "\u200b", inline: false });
 
-      if (subtitle) {
-        let sv = `# ${subtitle}`;
-        if (channelMention) sv += `\n📢 ${channelMention}`;
-        embed.addFields({ name: "📌 Destaque", value: sv, inline: false });
+        if (subtitle) {
+          let sv = `# ${subtitle}`;
+          if (channelMention) sv += `\n📢 ${channelMention}`;
+          embed.addFields({ name: "📌 Destaque", value: sv, inline: false });
+        }
+        if (downloadMsg && downloadLink)
+          embed.addFields({ name: "⬇️ Download", value: `[${downloadMsg}](${downloadLink})`, inline: false });
+
+        embed.setImage(LOGO_URL)
+             .setFooter({ text: "Redux Studios | Estamos A disposição" })
+             .setTimestamp();
+
+        await interaction.channel.send({
+          content: `<@&${EXECUTORS_ROLE_ID}>`,
+          embeds: [embed],
+          allowedMentions: { roles: [EXECUTORS_ROLE_ID] },
+        });
+        if (image) await interaction.channel.send({ files: [new AttachmentBuilder(image.url)] });
+        return interaction.editReply({ content: "✅ Log enviado com sucesso." });
+      } catch (err) {
+        console.error("[/logapp ERROR]", err);
+        return interaction.editReply({ content: `❌ Erro ao enviar log: \`${err.message}\`` });
       }
-      if (downloadMsg && downloadLink)
-        embed.addFields({ name: "⬇️ Download", value: `[${downloadMsg}](${downloadLink})`, inline: false });
-
-      embed.setImage(LOGO_URL)
-           .setFooter({ text: "Redux Studios | Estamos A disposição" })
-           .setTimestamp();
-
-      await interaction.channel.send({
-        content: `<@&${EXECUTORS_ROLE_ID}>`,
-        embeds: [embed],
-        allowedMentions: { roles: [EXECUTORS_ROLE_ID] },
-      });
-      if (image) await interaction.channel.send({ files: [new AttachmentBuilder(image.url)] });
-      return interaction.followUp({ content: "✅ Log enviado com sucesso.", ephemeral: true });
     }
 
     // ─── update ───
@@ -947,59 +1037,65 @@ client.on("interactionCreate", async (interaction) => {
       if (!isOwner && !hasRole)
         return interaction.reply({ content: "❌ Sem permissão.", ephemeral: true });
 
-      const name                  = interaction.options.getString("name");
-      const version               = interaction.options.getString("version");
-      const subtitle              = interaction.options.getString("subtitle");
-      const logRaw                = interaction.options.getString("log");
-      const downloadText          = interaction.options.getString("downloadtext");
-      const downloadLink          = interaction.options.getString("downloadlink");
-      const downloadVersionRBXText = interaction.options.getString("downloadversionrbxtext");
-      const downloadVersionRBXLink = interaction.options.getString("downloadversionrbxlink");
-      const notes                 = interaction.options.getString("notes");
-      const fixerChannel          = interaction.options.getChannel("fixer");
+      // Deferir IMEDIATAMENTE para evitar timeout de 3s do Discord
+      await interaction.deferReply({ flags: 64 });
 
-      // Converte | em quebra de linha simples e |-| em quebra dupla
-      const parseLog = (raw) =>
-        raw
-          .split("|-|").join("\n\n")
-          .split("|").join("\n");
+      try {
+        const name                  = interaction.options.getString("name");
+        const version               = interaction.options.getString("version");
+        const subtitle              = interaction.options.getString("subtitle");
+        const logRaw                = interaction.options.getString("log");
+        const downloadText          = interaction.options.getString("downloadtext");
+        const downloadLink          = interaction.options.getString("downloadlink");
+        const downloadVersionRBXText = interaction.options.getString("downloadversionrbxtext");
+        const downloadVersionRBXLink = interaction.options.getString("downloadversionrbxlink");
+        const notes                 = interaction.options.getString("notes");
+        const fixerChannel          = interaction.options.getChannel("fixer");
 
-      const logText = parseLog(logRaw);
-      const subtitleText = parseLog(subtitle);
+        // Converte | em quebra de linha simples e |-| em quebra dupla
+        const parseLog = (raw) =>
+          raw
+            .split("|-|").join("\n\n")
+            .split("|").join("\n");
 
-      const UPDATE_ROLE_ID = "1109671454116687872";
+        const logText = parseLog(logRaw);
+        const subtitleText = parseLog(subtitle);
 
-      const changelogBlock =
-        `\`\`\`ini\n` +
-        `[${name}] [>]:Update/Fixed/Improved\n` +
-        `[+]:Add\n` +
-        `[-]:Removed\n` +
-        `[*]:Trade\n` +
-        `[/]:Reveted\n\n` +
-        `${logText}\n` +
-        `\`\`\``;
+        const changelogBlock =
+          `\`\`\`ini\n` +
+          `[${name}] [>]:Update/Fixed/Improved\n` +
+          `[+]:Add\n` +
+          `[-]:Removed\n` +
+          `[*]:Trade\n` +
+          `[/]:Reveted\n\n` +
+          `${logText}\n` +
+          `\`\`\``;
 
-      const embed = new EmbedBuilder()
-        .setTitle(`${name} — Update to Version ${version}`)
-        .setColor(0x5865F2)
-        .setDescription(
-          `\`\`\`\n${subtitleText}\n\`\`\`\n\n` +
-          `**Changelog**\n${changelogBlock}\n\n` +
-          `**Download👇** [${downloadText}](${downloadLink})\n` +
-          `**Download Version👇** [${downloadVersionRBXText}](${downloadVersionRBXLink})\n` +
-          (notes ? `\n**Notes:** ${parseLog(notes)}\n` : "") +
-          `\nPra quem ja tem instalado (Reabra o RBXLauncher para o Update) For those who already have it installed (Reopen RBXLauncher for the Update)\n` +
-          `**Fixer:** ${fixerChannel}`
-        )
-        .setFooter({ text: "RBX EXPLOIT Update Log" })
-        .setTimestamp();
+        const embed = new EmbedBuilder()
+          .setTitle(`${name} — Update to Version ${version}`)
+          .setColor(0x5865F2)
+          .setDescription(
+            `\`\`\`\n${subtitleText}\n\`\`\`\n\n` +
+            `**Changelog**\n${changelogBlock}\n\n` +
+            `**Download👇** [${downloadText}](${downloadLink})\n` +
+            `**Download Version👇** [${downloadVersionRBXText}](${downloadVersionRBXLink})\n` +
+            (notes ? `\n**Notes:** ${parseLog(notes)}\n` : "") +
+            `\nPra quem ja tem instalado (Reabra o RBXLauncher para o Update) For those who already have it installed (Reopen RBXLauncher for the Update)\n` +
+            `**Fixer:** ${fixerChannel}`
+          )
+          .setFooter({ text: "RBX EXPLOIT Update Log" })
+          .setTimestamp();
 
-      await interaction.channel.send({
-        content: `@everyone`,
-        embeds: [embed],
-        allowedMentions: { parse: ["everyone"] },
-      });
-      return interaction.reply({ content: "✅ Update publicado!", flags: 64 });
+        await interaction.channel.send({
+          content: `@everyone`,
+          embeds: [embed],
+          allowedMentions: { parse: ["everyone"] },
+        });
+        return interaction.editReply({ content: "✅ Update publicado!" });
+      } catch (err) {
+        console.error("[/update ERROR]", err);
+        return interaction.editReply({ content: `❌ Erro ao publicar o update: \`${err.message}\`` });
+      }
     }
 
     // ─── annunciament ───
@@ -1011,28 +1107,35 @@ client.on("interactionCreate", async (interaction) => {
       if (!isOwner && !hasRole)
         return interaction.reply({ content: "❌ Sem permissão.", ephemeral: true });
 
-      const annLogRaw = interaction.options.getString("annunciamentlog");
+      await interaction.deferReply({ flags: 64 });
 
-      const parseLog = (raw) =>
-        raw
-          .split("|-|").join("\n\n")
-          .split("|").join("\n");
+      try {
+        const annLogRaw = interaction.options.getString("annunciamentlog");
 
-      const annText = parseLog(annLogRaw);
+        const parseLog = (raw) =>
+          raw
+            .split("|-|").join("\n\n")
+            .split("|").join("\n");
 
-      const embed = new EmbedBuilder()
-        .setTitle("📢 Annunciament")
-        .setColor(0x5865F2)
-        .setDescription(annText)
-        .setFooter({ text: `— ${interaction.user.tag}`, iconURL: interaction.user.displayAvatarURL() })
-        .setTimestamp();
+        const annText = parseLog(annLogRaw);
 
-      await interaction.channel.send({
-        content: `@everyone`,
-        embeds: [embed],
-        allowedMentions: { parse: ["everyone"] },
-      });
-      return interaction.reply({ content: "✅ Anúncio enviado!", flags: 64 });
+        const embed = new EmbedBuilder()
+          .setTitle("📢 Annunciament")
+          .setColor(0x5865F2)
+          .setDescription(annText)
+          .setFooter({ text: `— ${interaction.user.tag}`, iconURL: interaction.user.displayAvatarURL() })
+          .setTimestamp();
+
+        await interaction.channel.send({
+          content: `@everyone`,
+          embeds: [embed],
+          allowedMentions: { parse: ["everyone"] },
+        });
+        return interaction.editReply({ content: "✅ Anúncio enviado!" });
+      } catch (err) {
+        console.error("[/annunciament ERROR]", err);
+        return interaction.editReply({ content: `❌ Erro ao enviar anúncio: \`${err.message}\`` });
+      }
     }
 
     // ─── help ───
