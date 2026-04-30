@@ -7,9 +7,9 @@
   },
   "Windows Free": {
     "Ronix": "(STATUS :green_circle:)(UNCs :green_circle:)",
-    "Bunni": "(STATUS :green_circle:)(UNCs :red_circle:)",
+    "Bunni": "(STATUS :red_circle:)(UNCs :red_circle:)",
     "Velocity": "(STATUS :green_circle:)(UNCs :green_circle:)",
-    "RBXexploit": "(STATUS :green_circle:)(UNCs :green_circle:)",
+    "RBXexploit": "(STATUS :yellow_circle:)(UNCs :yellow_circle:)",
     "Xeno": "(STATUS :green_circle:)(UNCs :green_circle:)",
     "Solara": "(STATUS :green_circle:)(UNCs :green_circle:)",
     "Redux": "(STATUS :red_circle:)(UNCs :red_circle:)",
@@ -35,8 +35,7 @@
     "ValexExternal": "(STATUS :red_circle:)(UNCs :red_circle:)",
     "DriftEXT": "(STATUS :green_circle:)(UNCs :green_circle:)",
     "Solara": "(STATUS :green_circle:)(UNCs :green_circle:)",
-    "Xeno": "(STATUS :green_circle:)(UNCs :green_circle:)",
-    "AWP": "(STATUS :green_circle:)(UNCs :green_circle:)"
+    "Xeno": "(STATUS :green_circle:)(UNCs :green_circle:)"
   },
   "External Paid": {
     "Matcha": "(STATUS :green_circle:)(UNCs :green_circle:) 11.99$",
