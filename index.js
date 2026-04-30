@@ -107,10 +107,18 @@ function xpNeeded(level) { return 20 + (level - 1) * 5; }
 
 // ===================== STATUS HELPERS =====================
 async function loadStatus() {
-  try { return JSON.parse(await fsPromise.readFile(STATUS_FILE, "utf-8")); }
-  catch { return {}; }
-}
+  try {
+    const res = await fetch("https://raw.githubusercontent.com/biellucas12102010-source/RBXBot2/main/status_all.json", {
+      headers: { "Cache-Control": "no-cache" }
+    });
 
+    if (!res.ok) return null;
+
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
 // ===================== ROBLOX FETCH HELPERS =====================
 function getDownloadLink(platform, version) {
   if (platform === "Windows")
@@ -1182,21 +1190,25 @@ async function startReduxStatusWatcher() {
 
   // 2) Salva o hash atual para o watcher so disparar quando o JSON mudar de verdade
   try {
-    const raw = await fsPromise.readFile(STATUS_FILE, "utf-8");
-    lastStatusHash = computeHash(raw);
-  } catch { lastStatusHash = 0; }
+  const data = await loadStatus();
+  const raw  = JSON.stringify(data);
+  lastStatusHash = computeHash(raw);
+} catch {
+  lastStatusHash = 0;
+}
 
   // 3) Observa mudancas no arquivo a cada 1 segundo
   setInterval(async () => {
-    try {
-      const raw  = await fsPromise.readFile(STATUS_FILE, "utf-8");
-      const hash = computeHash(raw);
-      if (hash !== lastStatusHash) {
-        lastStatusHash = hash;
-        await updateReduxStatusEmbed();
-      }
-    } catch (e) { console.error("[WATCHER ERROR]", e); }
-  }, 1000);
+  if (!cachedData) return;
+
+  const raw  = JSON.stringify(cachedData);
+  const hash = computeHash(raw);
+
+  if (hash !== lastStatusHash) {
+    lastStatusHash = hash;
+    await updateReduxStatusEmbed();
+  }
+}, 1000); // 1s
 }
 
 // ===================== KEEP ALIVE =====================
