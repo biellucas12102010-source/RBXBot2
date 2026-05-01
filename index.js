@@ -35,13 +35,14 @@ const TOKEN      = process.env.TOKEN_BOT;
 const CLIENT_ID  = process.env.Application_ID;
 const GUILD_ID   = process.env.GUILD_ID;
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || process.env.FREETHEAI_API_KEY;
-const AI_PROVIDER = process.env.GEMINI_API_KEY ? "gemini" : (process.env.FREETHEAI_API_KEY ? "freetheai" : null);
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const FREETHEAI_API_KEY = process.env.FREETHEAI_API_KEY;
+const AI_PROVIDER = GEMINI_API_KEY ? "gemini" : (FREETHEAI_API_KEY ? "freetheai" : null);
 
 if (!TOKEN)     { console.error("❌ TOKEN_BOT não encontrado no .env"); process.exit(1); }
 if (!CLIENT_ID) { console.error("❌ Application_ID não encontrado no .env"); process.exit(1); }
 if (!GUILD_ID)  { console.error("❌ GUILD_ID não encontrado no .env"); process.exit(1); }
-if (!AI_PROVIDER) { console.warn("⚠️  API key não encontrada no .env — IA no PV desativada."); }
+if (!AI_PROVIDER) { console.warn("⚠️ API key não encontrada no .env — IA no PV desativada."); }
 
 // Histórico de conversa por usuário no PV (mantido em memória)
 const dmConversations = new Map(); // userId -> [{ role, content }]
@@ -468,19 +469,20 @@ client.on("messageCreate", async (message) => {
   // ── IA no PV ──
   if (!message.guild) {
     console.log(`[DM] Mensagem recebida de ${message.author.tag}: ${message.content}`);
-if (!AI_PROVIDER) {
-        console.warn("[DM] API key não definida — ignorando.");
-        return;
-      }
+    console.log(`[DM] AI_PROVIDER: ${AI_PROVIDER}`);
+    if (!AI_PROVIDER) {
+      console.warn("[DM] API key não definida — ignorando.");
+      return;
+    }
 
-      const userId    = message.author.id;
-      const userInput = message.content.trim();
-      if (!userInput) return;
+    const userId    = message.author.id;
+    const userInput = message.content.trim();
+    if (!userInput) return;
 
-      await message.channel.sendTyping();
+    await message.channel.sendTyping();
 
-      if (!dmConversations.has(userId)) dmConversations.set(userId, []);
-      const history = dmConversations.get(userId);
+    if (!dmConversations.has(userId)) dmConversations.set(userId, []);
+    const history = dmConversations.get(userId);
 
       // Limpar history para formato correto
       const cleanHistory = history.length === 0 
