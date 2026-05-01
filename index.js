@@ -35,12 +35,13 @@ const TOKEN      = process.env.TOKEN_BOT;
 const CLIENT_ID  = process.env.Application_ID;
 const GUILD_ID   = process.env.GUILD_ID;
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || process.env.FREETHEAI_API_KEY;
+const AI_PROVIDER = process.env.GEMINI_API_KEY ? "gemini" : (process.env.FREETHEAI_API_KEY ? "freetheai" : null);
 
 if (!TOKEN)     { console.error("❌ TOKEN_BOT não encontrado no .env"); process.exit(1); }
 if (!CLIENT_ID) { console.error("❌ Application_ID não encontrado no .env"); process.exit(1); }
 if (!GUILD_ID)  { console.error("❌ GUILD_ID não encontrado no .env"); process.exit(1); }
-if (!GEMINI_API_KEY) { console.warn("⚠️  GEMINI_API_KEY não encontrado no .env — IA no PV desativada."); }
+if (!AI_PROVIDER) { console.warn("⚠️  API key não encontrada no .env — IA no PV desativada."); }
 
 // Histórico de conversa por usuário no PV (mantido em memória)
 const dmConversations = new Map(); // userId -> [{ role, content }]
@@ -421,8 +422,22 @@ const rest = new REST({ version: "10" }).setToken(TOKEN);
 })();
 
 // ===================== READY =====================
+const LOG_CHANNEL_ID = "1490914288297050213";
+const LOG_ROLE_ID = "1109671454116687872";
+
 client.once("ready", async () => {
   console.log(`🤖 Online como ${client.user.tag}`);
+
+  // Enviar mensagem de online
+  const logChannel = await client.channels.fetch(LOG_CHANNEL_ID).catch(() => null);
+  if (logChannel) {
+    const embed = new EmbedBuilder()
+      .setTitle("🤖 RBX-BOT Online")
+      .setDescription("O bot esta 🟢 Online e funcionando!")
+      .setColor(0x00FF00)
+      .setTimestamp();
+    await logChannel.send({ content: `<@&${LOG_ROLE_ID}>`, embeds: [embed], allowedMentions: { roles: [LOG_ROLE_ID] } });
+  }
 
   // Carregar mensagem de status Redux existente
   const statusChannel = await client.channels.fetch(REDUX_CHANNEL_ID).catch(() => null);
@@ -453,70 +468,102 @@ client.on("messageCreate", async (message) => {
   // ── IA no PV ──
   if (!message.guild) {
     console.log(`[DM] Mensagem recebida de ${message.author.tag}: ${message.content}`);
-    if (!GEMINI_API_KEY) {
-      console.warn("[DM] GEMINI_API_KEY não definida — ignorando.");
-      return;
-    }
+if (!AI_PROVIDER) {
+        console.warn("[DM] API key não definida — ignorando.");
+        return;
+      }
 
-    const userId    = message.author.id;
-    const userInput = message.content.trim();
-    if (!userInput) return;
+      const userId    = message.author.id;
+      const userInput = message.content.trim();
+      if (!userInput) return;
 
-    await message.channel.sendTyping();
+      await message.channel.sendTyping();
 
-    if (!dmConversations.has(userId)) dmConversations.set(userId, []);
-    const history = dmConversations.get(userId);
+      if (!dmConversations.has(userId)) dmConversations.set(userId, []);
+      const history = dmConversations.get(userId);
 
-    // Gemini usa { role: "user"|"model", parts: [{ text }] }
-    history.push({ role: "user", parts: [{ text: userInput }] });
-    while (history.length > DM_MAX_HISTORY) history.shift();
+      // Limpar history para formato correto
+      const cleanHistory = history.length === 0 
+        ? [] 
+        : history.filter(m => m.role && m.parts && m.parts[0] && m.parts[0].text);
 
-    try {
-      const res = await nodeFetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            system_instruction: {
-              parts: [{
-                text: `Você é o assistente oficial do RBX-BOT, um bot do Discord focado em executores do Roblox e novidades da plataforma Roblox.
+      cleanHistory.push({ role: "user", parts: [{ text: userInput }] });
+      while (cleanHistory.length > DM_MAX_HISTORY) cleanHistory.shift();
+
+      const systemPrompt = `Você é o assistente oficial do RBX-BOT, um bot do Discord focado em executores do Roblox e novidades da plataforma Roblox.
 Responda sempre em português do Brasil, de forma amigável, direta e útil.
 Você conhece sobre executores como Xeno, Solara, Wave, Ronix, Delta (mobile), e sobre updates do Roblox para Windows, Mac, Android e iOS.
 Se o usuário perguntar algo fora do contexto de Roblox, responda normalmente como um assistente geral.
-Nunca diga que é uma IA do Google — diga apenas que é o assistente do RBX-BOT.`
-              }]
-            },
-            contents: history,
-          }),
+Nunca diga que é uma IA — diga apenas que é o assistente do RBX-BOT.`;
+
+      try {
+        let res, data, reply;
+
+        if (AI_PROVIDER === "gemini") {
+          // Usar Gemini
+          res = await nodeFetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                system_instruction: { parts: [{ text: systemPrompt }] },
+                contents: cleanHistory,
+              }),
+            }
+          );
+          data = await res.json();
+          reply = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        } else {
+          // Usar FreeTheAi
+          const FREETHEAI_API_KEY = process.env.FREETHEAI_API_KEY;
+          res = await nodeFetch(
+            "https://api.freetheai.xyz/v1/chat/completions",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${FREETHEAI_API_KEY}`,
+              },
+              body: JSON.stringify({
+                model: "google/gemini-2.0-flash",
+                messages: [
+                  { role: "system", content: systemPrompt },
+                  ...cleanHistory.map(m => ({ role: m.role, content: m.parts[0].text }))
+                ],
+              }),
+            }
+          );
+          data = await res.json();
+          reply = data.choices?.[0]?.message?.content;
         }
-      );
 
-      if (!res.ok) {
-        const err = await res.text();
-        console.error("[IA DM ERROR]", err);
-        return message.reply("❌ Erro ao processar sua mensagem. Tente novamente mais tarde.");
+        if (!res.ok) {
+          const err = await res.text();
+          console.error("[IA DM ERROR]", err);
+          return message.reply("❌ Erro ao processar sua mensagem. Tente novamente mais tarde.");
+        }
+
+        if (!reply) {
+          return message.reply("❌ Não consegui gerar uma resposta.");
+        }
+
+        // Salva resposta no histórico
+        history.push({ role: "model", parts: [{ text: reply }] });
+        while (history.length > DM_MAX_HISTORY) history.shift();
+
+        if (reply.length <= 2000) {
+          await message.reply(reply);
+        } else {
+          const chunks = reply.match(/.{1,2000}/gs) || [];
+          for (const chunk of chunks) await message.channel.send(chunk);
+        }
+      } catch (err) {
+        console.error("[IA DM FETCH ERROR]", err);
+        await message.reply("❌ Ocorreu um erro interno. Tente novamente.");
       }
-
-      const data  = await res.json();
-      const reply = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "❌ Não consegui gerar uma resposta.";
-
-      // Salva resposta no histórico
-      history.push({ role: "model", parts: [{ text: reply }] });
-      while (history.length > DM_MAX_HISTORY) history.shift();
-
-      if (reply.length <= 2000) {
-        await message.reply(reply);
-      } else {
-        const chunks = reply.match(/.{1,2000}/gs) || [];
-        for (const chunk of chunks) await message.channel.send(chunk);
-      }
-    } catch (err) {
-      console.error("[IA DM FETCH ERROR]", err);
-      await message.reply("❌ Ocorreu um erro interno. Tente novamente.");
+      return;
     }
-    return;
-  }
 
   // ── XP em servidor ──
   const data = await loadXP();
