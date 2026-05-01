@@ -477,6 +477,13 @@ client.on("messageCreate", async (message) => {
 
     const userId    = message.author.id;
     const userInput = message.content.trim();
+    
+    // Verificar se tem anexos/imagens
+    if (message.attachments.size > 0) {
+      await message.reply("Desculpe, no momento nao consigo processar imagens. Por favor, envie apenas texto!");
+      return;
+    }
+    
     if (!userInput) return;
 
     await message.channel.sendTyping();
