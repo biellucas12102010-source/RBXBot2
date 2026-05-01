@@ -54,7 +54,7 @@ const pollMap = new Map();
 // ===================== CONSTANTES =====================
 // — Roblox Update Checker
 const CONFIG_FILE      = "./config.json";
-const CHECK_INTERVAL   = 60 * 1000; // 1 minuto
+const CHECK_INTERVAL   = 5 * 60 * 1000; // 5 minutos
 const ROBLOX_LOGO      =
   "https://cdn.discordapp.com/attachments/1213128047361007648/1471894577521754226/ChatGPT_Image_13_de_fev._de_2026_11_53_49.png?ex=69909825&is=698f46a5&hm=17868cc54d0d4c4154a9b68add4b2e81014b0563ace388fb43d92ec1c27fa6a5";
 
@@ -1644,8 +1644,18 @@ function startRobloxUpdateChecker() {
 
           if (currentVersion && typeof currentVersion === "string" && currentVersion.includes(".")) {
             const last = cfg.lastVersions[platform];
-            if (!last) { cfg.lastVersions[platform] = currentVersion; saveRbxConfig(); continue; }
-            if (last === currentVersion) continue;
+            if (!last) { 
+              cfg.lastVersions[platform] = currentVersion; 
+              saveRbxConfig(); 
+              console.log(`[ROBLOX] Primeira versao ${platform}: ${currentVersion}`);
+              continue; 
+            }
+            if (last === currentVersion) {
+              console.log(`[ROBLOX] ${platform}: ${currentVersion} = ${last}, mesmo`);
+              continue;
+            }
+            
+            console.log(`[ROBLOX] NOVA versao ${platform}: ${last} -> ${currentVersion}`);
             cfg.lastVersions[platform] = currentVersion;
             saveRbxConfig();
             const link  = getDownloadLink(platform, currentVersion);
