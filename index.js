@@ -44,7 +44,10 @@ if (!GEMINI_API_KEY) { console.warn("⚠️  GEMINI_API_KEY não encontrado no .
 
 // Histórico de conversa por usuário no PV (mantido em memória)
 const dmConversations = new Map(); // userId -> [{ role, content }]
-const DM_MAX_HISTORY  = 20; // máximo de mensagens guardadas por usuário
+const DM_MAX_HISTORY  = 20;
+
+const collectorMap = new Map();
+const pollMap = new Map();
 
 // ===================== CONSTANTES =====================
 // — Roblox Update Checker
@@ -339,10 +342,47 @@ const commandDefs = [
     .addChannelOption(o => o.setName("fixer").setDescription("Canal do fixer").setRequired(true))
     .addStringOption(o => o.setName("notes").setDescription("Notas adicionais (opcional)").setRequired(false)),
 
-  new SlashCommandBuilder()
+new SlashCommandBuilder()
     .setName("annunciament")
-    .setDescription("Envia um anúncio")
-    .addStringOption(o => o.setName("annunciamentlog").setDescription("Texto do anúncio (| = 1 linha, |-| = 2 linhas)").setRequired(true)),
+    .setDescription("Envia um anuncio")
+    .addStringOption(o => o.setName("annunciamentlog").setDescription("Texto do anuncio (| = 1 linha, |-| = 2 linhas)").setRequired(false))
+    .addAttachmentOption(o => o.setName("image").setDescription("Imagem (jpg, png, gif)").setRequired(false))
+    .addAttachmentOption(o => o.setName("video").setDescription("Video (mp4, mov)").setRequired(false))
+    .addAttachmentOption(o => o.setName("file").setDescription("Arquivo (zip, pdf, etc)").setRequired(false)),
+
+  new SlashCommandBuilder()
+    .setName("creategiveaway")
+    .setDescription("Cria um giveaway")
+    .addStringOption(o => o.setName("prize").setDescription("Premio oferecido (ex: 1 mes Premium)").setRequired(true))
+    .addStringOption(o => o.setName("description").setDescription("Descricao adicional").setRequired(false))
+    .addIntegerOption(o => o.setName("winners").setDescription("Numero de vencedores").setRequired(false))
+    .addIntegerOption(o => o.setName("duration").setDescription("Duracao em minutos").setRequired(false))
+    .addAttachmentOption(o => o.setName("image").setDescription("Imagem do premio").setRequired(false))
+    .addAttachmentOption(o => o.setName("file").setDescription("Arquivo do premio").setRequired(false)),
+
+  new SlashCommandBuilder()
+    .setName("serverstats")
+    .setDescription("Mostra estatisticas do servidor"),
+
+  new SlashCommandBuilder()
+    .setName("pin")
+    .setDescription("Pin uma mensagem no canal")
+    .addStringOption(o => o.setName("mensagem").setDescription("Mensagem para fixar").setRequired(false))
+    .addAttachmentOption(o => o.setName("imagem").setDescription("Imagem para fixar").setRequired(false)),
+
+  new SlashCommandBuilder()
+    .setName("autorole")
+    .setDescription("Cria auto-role por reaction")
+    .addStringOption(o => o.setName("cargo").setDescription("Nome do cargo").setRequired(true))
+    .addStringOption(o => o.setName("emoji").setDescription("Emoji para reagir").setRequired(true))
+    .addStringOption(o => o.setName("mensagem").setDescription("Mensagem explicativa").setRequired(false)),
+
+  new SlashCommandBuilder()
+    .setName("poll")
+    .setDescription("Cria uma enquete")
+    .addStringOption(o => o.setName("pergunta").setDescription("Pergunta da enquete").setRequired(true))
+    .addStringOption(o => o.setName("opcoes").setDescription("Opcoes separadas por virgula").setRequired(true))
+    .addIntegerOption(o => o.setName("tempo").setDescription("Tempo em minutos").setRequired(false)),
 
   new SlashCommandBuilder()
     .setName("test")
@@ -1111,13 +1151,20 @@ client.on("interactionCreate", async (interaction) => {
 
       try {
         const annLogRaw = interaction.options.getString("annunciamentlog");
+        const image = interaction.options.getAttachment("image");
+        const video = interaction.options.getAttachment("video");
+        const file = interaction.options.getAttachment("file");
+
+        if (!annLogRaw && !image && !video && !file) {
+          return interaction.editReply({ content: "❌ Adicione pelo menos um conteúdo (texto, imagem, vídeo ou arquivo)." });
+        }
 
         const parseLog = (raw) =>
           raw
             .split("|-|").join("\n\n")
             .split("|").join("\n");
 
-        const annText = parseLog(annLogRaw);
+        const annText = annLogRaw ? parseLog(annLogRaw) : "📢 Novo Anuncio!";
 
         const embed = new EmbedBuilder()
           .setTitle("📢 Annunciament")
@@ -1126,16 +1173,273 @@ client.on("interactionCreate", async (interaction) => {
           .setFooter({ text: `— ${interaction.user.tag}`, iconURL: interaction.user.displayAvatarURL() })
           .setTimestamp();
 
-        await interaction.channel.send({
-          content: `@everyone`,
-          embeds: [embed],
-          allowedMentions: { parse: ["everyone"] },
-        });
-        return interaction.editReply({ content: "✅ Anúncio enviado!" });
+        if (image) embed.setImage(image.url);
+
+        if (video || file) {
+          const files = [];
+          if (video) {
+            const vData = await nodeFetch(video.url).then(r => r.buffer());
+            files.push(new AttachmentBuilder(vData, { name: video.name }));
+          }
+          if (file) {
+            const fData = await nodeFetch(file.url).then(r => r.buffer());
+            files.push(new AttachmentBuilder(fData, { name: file.name }));
+          }
+          await interaction.channel.send({
+            content: "@everyone",
+            embeds: [embed],
+            files: files,
+            allowedMentions: { parse: ["everyone"] },
+          });
+        } else {
+          await interaction.channel.send({
+            content: "@everyone",
+            embeds: [embed],
+            allowedMentions: { parse: ["everyone"] },
+          });
+        }
+        return interaction.editReply({ content: "✅ Anuncio enviado!" });
       } catch (err) {
         console.error("[/annunciament ERROR]", err);
-        return interaction.editReply({ content: `❌ Erro ao enviar anúncio: \`${err.message}\`` });
+        return interaction.editReply({ content: `❌ Erro ao enviar anuncio: \`${err.message}\`` });
       }
+    }
+
+    // ─── creategiveaway ───
+    if (commandName === "creategiveaway") {
+      const GIVEAWAY_ROLE = "1109671454473203738";
+      const isOwner = interaction.guild.ownerId === interaction.user.id;
+      const hasRole = interaction.member.roles.cache.has(GIVEAWAY_ROLE);
+      if (!isOwner && !hasRole)
+        return interaction.reply({ content: "❌ Sem permissao.", ephemeral: true });
+
+      await interaction.deferReply({ flags: 64 });
+
+      try {
+        const prize = interaction.options.getString("prize");
+        const description = interaction.options.getString("description");
+        const winners = interaction.options.getInteger("winners") || 1;
+        const duration = interaction.options.getInteger("duration") || 60;
+        const image = interaction.options.getAttachment("image");
+        const file = interaction.options.getAttachment("file");
+
+        const participantes = new Set();
+        const endTime = Date.now() + duration * 60 * 1000;
+
+        const embed = new EmbedBuilder()
+          .setTitle("🎉 GIVEAWAY")
+          .setDescription(`**Premio:** ${prize}`)
+          .addFields(
+            { name: "Descricao", value: description || "Sem descricao", inline: false },
+            { name: "Vencedores", value: winners.toString(), inline: true },
+            { name: "Participantes", value: "0", inline: true },
+            { name: "Termina em", value: `<t:${Math.floor(endTime / 1000)}:R>`, inline: true }
+          )
+          .setColor(0xFFD700)
+          .setFooter({ text: `Criado por ${interaction.user.tag}` })
+          .setTimestamp();
+
+        if (image) embed.setImage(image.url);
+
+        const msg = await interaction.channel.send({
+          content: "🎉 **GIVEAWAY!** Reaja com ✅ para participar!",
+          embeds: [embed],
+        });
+
+        await msg.react("✅");
+
+        const filter = (reaction, user) => reaction.emoji.name === "✅" && !user.bot;
+        const collector = msg.createReactionCollector({ filter, time: duration * 60 * 1000 });
+
+        collector.on("collect", (reaction, user) => {
+          if (!participantes.has(user.id)) {
+            participantes.add(user.id);
+            embed.spliceFields(2, 1, { name: "Participantes", value: participantes.size.toString(), inline: true });
+            msg.edit({ embeds: [embed] });
+          }
+        });
+
+        collector.on("end", async () => {
+          if (participantes.size === 0) {
+            embed.setDescription(`**Premio:** ${prize}\n\n❌ Sem participantes!`);
+            embed.setColor(0xFF0000);
+            await msg.edit({ embeds: [embed], content: "❌ Giveaway encerrado sem participantes." });
+            return;
+          }
+
+          const winnersList = [];
+          const partieArray = Array.from(participantes);
+          for (let i = 0; i < Math.min(winners, partieArray.length); i++) {
+            const randomIndex = Math.floor(Math.random() * partieArray.length);
+            winnersList.push(partieArray[randomIndex]);
+            partieArray.splice(randomIndex, 1);
+          }
+
+          const winnerMentions = winnersList.map(id => `<@${id}>`).join(", ");
+          embed.setDescription(`**Premio:** ${prize}\n\n🎉 **Vencedor(es):** ${winnerMentions}`);
+          embed.setColor(0x00FF00);
+          embed.spliceFields(3, 1, { name: "Terminado", value: "Encerrado!", inline: true });
+
+          if (file) {
+            const fData = await nodeFetch(file.url).then(r => r.buffer());
+            await interaction.channel.send({ content: `🎉 Parabens ${winnerMentions}! voce(s) ganhou(ram) ${prize}!`, files: [new AttachmentBuilder(fData, { name: file.name })] });
+          } else {
+            await interaction.channel.send({ content: `🎉 Parabens ${winnerMentions}! voce(s) ganhou(ram) ${prize}!` });
+          }
+          await msg.edit({ embeds: [embed] });
+        });
+
+        return interaction.editReply({ content: "✅ Giveaway criado!" });
+      } catch (err) {
+        console.error("[/creategiveaway ERROR]", err);
+        return interaction.editReply({ content: `❌ Erro ao criar giveaway: \`${err.message}\`` });
+      }
+    }
+
+    // ─── serverstats ───
+    if (commandName === "serverstats") {
+      const guild = interaction.guild;
+      if (!guild) return interaction.reply({ content: "Este comando so funciona em servidores.", ephemeral: true });
+
+      await interaction.deferReply({ ephemeral: true });
+
+      const members = await guild.members.fetch();
+      const channels = await guild.channels.fetch();
+      const roles = await guild.roles.fetch();
+      const bots = members.filter(m => m.user.bot).size;
+      const humans = members.size - bots;
+      const textChannels = channels.filter(c => c.type === 0).size;
+      const voiceChannels = channels.filter(c => c.type === 2).size;
+      const categories = channels.filter(c => c.type === 4).size;
+
+      const embed = new EmbedBuilder()
+        .setTitle(`📊 ${guild.name}`)
+        .setColor(0x5865F2)
+        .addFields(
+          { name: "👥 Membros", value: `Total: ${members.size}\nHumanos: ${humans}\nBots: ${bots}`, inline: true },
+          { name: "📢 Canais", value: `Texto: ${textChannels}\nVoz: ${voiceChannels}\nCategorias: ${categories}`, inline: true },
+          { name: "🎭 Cargos", value: roles.size.toString(), inline: true },
+          { name: "🆔 Server ID", value: guild.id, inline: true },
+          { name: "📅 Criado em", value: guild.createdAt.toLocaleDateString("pt-BR"), inline: true }
+        )
+        .setThumbnail(guild.iconURL())
+        .setFooter({ text: `Dono: ${(await guild.fetchOwner()).user.tag}` });
+
+      return interaction.editReply({ embeds: [embed] });
+    }
+
+    // ─── pin ───
+    if (commandName === "pin") {
+      const PIN_ROLE = "1109671454473203738";
+      const isOwner = interaction.guild.ownerId === interaction.user.id;
+      const hasRole = interaction.member.roles.cache.has(PIN_ROLE);
+      if (!isOwner && !hasRole)
+        return interaction.reply({ content: "❌ Sem permissao.", ephemeral: true });
+
+      const messageText = interaction.options.getString("mensagem");
+      const image = interaction.options.getAttachment("imagem");
+
+      if (!messageText && !image)
+        return interaction.reply({ content: "❌ Adicione uma mensagem ou imagem.", ephemeral: true });
+
+      const embed = new EmbedBuilder()
+        .setTitle("📌 Mensagem Fixada")
+        .setColor(0xFFD700)
+        .setDescription(messageText || " ")
+        .setFooter({ text: `Fixado por ${interaction.user.tag}` })
+        .setTimestamp();
+
+      if (image) embed.setImage(image.url);
+
+      await interaction.channel.send({ embeds: [embed] });
+      return interaction.reply({ content: "✅ Mensagem fixada!", ephemeral: true });
+    }
+
+    // ─── autorole ───
+    if (commandName === "autorole") {
+      const AUTO_ROLE = "1109671454473203738";
+      const isOwner = interaction.guild.ownerId === interaction.user.id;
+      const hasRole = interaction.member.roles.cache.has(AUTO_ROLE);
+      if (!isOwner && !hasRole)
+        return interaction.reply({ content: "❌ Sem permissao.", ephemeral: true });
+
+      await interaction.deferReply({ ephemeral: true });
+
+      const roleName = interaction.options.getString("cargo");
+      const emoji = interaction.options.getString("emoji");
+      const description = interaction.options.getString("mensagem") || "Reaja para obter o cargo";
+
+      const role = interaction.guild.roles.cache.find(r => r.name.toLowerCase() === roleName.toLowerCase())
+        || interaction.guild.roles.cache.find(r => r.name.toLowerCase().includes(roleName.toLowerCase()));
+
+      if (!role)
+        return interaction.editReply({ content: `❌ Cargo "${roleName}" nao encontrado.`, embeds: [] });
+
+      const embed = new EmbedBuilder()
+        .setTitle("🎭 Auto-Role")
+        .setDescription(`${description}\n\n${emoji} = ${role}`)
+        .setColor(0x5865F2);
+
+      const msg = await interaction.channel.send({ embeds: [embed] });
+      await msg.react(emoji);
+
+      collectorMap.set(msg.id, { roleId: role.id, emoji });
+
+      return interaction.editReply({ content: "✅ Auto-role criado!", embeds: [] });
+    }
+
+    // ─── poll ───
+    if (commandName === "poll") {
+      await interaction.deferReply({ ephemeral: true });
+
+      const question = interaction.options.getString("pergunta");
+      const options = interaction.options.getString("opcoes").split(",").map(o => o.trim());
+      const duration = interaction.options.getInteger("tempo") || 60;
+
+      if (options.length < 2)
+        return interaction.editReply({ content: "❌ Adicione pelo menos 2 opcoes!", embeds: [] });
+
+      if (options.length > 10)
+        return interaction.editReply({ content: "❌ Maximo de 10 opcoes!", embeds: [] });
+
+      const emojis = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"];
+      const optionText = options.map((opt, i) => `${emojis[i]} ${opt}`).join("\n");
+
+      const embed = new EmbedBuilder()
+        .setTitle("📊 Enquete")
+        .setDescription(`**${question}**\n\n${optionText}`)
+        .addFields({ name: "Tempo", value: `<t:${Math.floor((Date.now() + duration * 60000) / 1000)}:R>`, inline: true })
+        .setColor(0x5865F2)
+        .setFooter({ text: `Votos: 0` });
+
+      const msg = await interaction.channel.send({ embeds: [embed] });
+
+      for (let i = 0; i < options.length; i++) {
+        await msg.react(emojis[i]);
+      }
+
+      pollMap.set(msg.id, { question, options, votes: options.map(() => 0), voters: new Map(), duration, endTime: Date.now() + duration * 60000 });
+
+      setTimeout(async () => {
+        const poll = pollMap.get(msg.id);
+        if (!poll) return;
+
+        const votes = poll.votes;
+        const maxVotes = Math.max(...votes);
+        const winners = poll.options.filter((_, i) => votes[i] === maxVotes);
+        const winnerText = winners.length === 1 ? winners[0] : winners.join(" | ");
+
+        embed.setDescription(`**${poll.question}**\n\n${poll.options.map((opt, i) => `${emojis[i]} ${opt}: ${votes[i]} votos`).join("\n")}`);
+        embed.setColor(0xFFD700);
+        embed.spliceFields(0, 1, { name: "Resultado", value: winnerText, inline: true });
+
+        await msg.edit({ embeds: [embed] });
+        await msg.reply({ content: `📊 **Enquete encerrada!** Vencedor: **${winnerText}**` });
+
+        pollMap.delete(msg.id);
+      }, duration * 60000);
+
+      return interaction.editReply({ content: "✅ Enquete criada!", embeds: [] });
     }
 
     // ─── help ───
@@ -1146,9 +1450,10 @@ client.on("interactionCreate", async (interaction) => {
         .setColor(0x5865F2)
         .addFields(
           { name: "🎮 Roblox",    value: "`/manage-notification` `/current-version` `/update-roblox`", inline: false },
-          { name: "📢 Logs & Anúncios", value: "`/update` `/annunciament` `/logapp`", inline: false },
-          { name: "⚙️ Utilidades",value: "`/status` `/status-redux` `/dashboard` `/execdownload`", inline: false },
-          { name: "🛠️ Moderação", value: "`/cleaner` `/reduxstatesexecutor` `/sync`", inline: false },
+          { name: "📢 Logs & Anuncios", value: "`/update` `/annunciament` `/logapp` `/creategiveaway`", inline: false },
+          { name: "⚙️ Utilidades", value: "`/serverstats` `/status` `/status-redux` `/dashboard` `/execdownload`", inline: false },
+          { name: "🎭 Interativos", value: "`/poll` `/autorole`", inline: false },
+          { name: "🛠️ Moderação", value: "`/pin` `/cleaner` `/reduxstatesexecutor` `/sync`", inline: false },
           { name: "📊 XP",        value: "`/xp` `/xp_add` `/xp_set` `/xp_remove` `/addxp` `/setlevel` `/removexp`", inline: false },
           { name: "ℹ️ Info",       value: "`/info` `/rules`", inline: false }
         )
@@ -1216,6 +1521,42 @@ client.on("interactionCreate", async (interaction) => {
       return interaction.update({ content: "Escolha uma plataforma:", embeds: [], components: [row, backRow] });
     }
   }
+
+  // ── REACTION COLLECTOR ──
+  else if (interaction.isMessageReactionAdd()) {
+    const message = interaction.message;
+    const user = interaction.user;
+
+    const autoRole = collectorMap.get(message.id);
+    if (autoRole) {
+      const role = message.guild.roles.cache.get(autoRole.roleId);
+      if (role) {
+        const member = await message.guild.members.fetch(user.id);
+        await member.roles.add(role);
+      }
+    }
+
+    const poll = pollMap.get(message.id);
+    if (poll) {
+      const emoji = interaction._emoji.name;
+      const emojis = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"];
+      const index = emojis.indexOf(emoji);
+      if (index !== -1 && index < poll.options.length) {
+        if (poll.voters.has(user.id)) {
+          const oldIndex = poll.voters.get(user.id);
+          poll.votes[oldIndex]--;
+        }
+        poll.votes[index]++;
+        poll.voters.set(user.id, index);
+
+        const optionText = poll.options.map((opt, i) => `${emojis[i]} ${opt}: ${poll.votes[i]} votos`).join("\n");
+        const embed = new EmbedBuilder(message.embeds[0].data)
+          .setDescription(`**${poll.question}**\n\n${optionText}`)
+          .setFooter({ text: `Votos: ${poll.voters.size}` });
+        await message.edit({ embeds: [embed] });
+      }
+    }
+  }
 });
 
 // ===================== ROBLOX UPDATE CHECKER =====================
@@ -1245,7 +1586,7 @@ function startRobloxUpdateChecker() {
             : platform === "iOS"     ? iosVersion
             : androidVersion;
 
-          if (currentVersion) {
+          if (currentVersion && typeof currentVersion === "string" && currentVersion.includes(".")) {
             const last = cfg.lastVersions[platform];
             if (!last) { cfg.lastVersions[platform] = currentVersion; saveRbxConfig(); continue; }
             if (last === currentVersion) continue;
