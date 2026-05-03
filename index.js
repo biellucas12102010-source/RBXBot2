@@ -51,6 +51,24 @@ const DM_MAX_HISTORY  = 20;
 const collectorMap = new Map();
 const pollMap = new Map();
 
+// RBX Key API
+const RBX_KEY_API_URL = process.env.RBX_KEY_API_URL || "https://rbxadminkey.netlify.app/api";
+const RBX_KEY_ADMIN_TOKEN = process.env.RBX_KEY_ADMIN_TOKEN || "redux-admin-secret";
+
+async function generateRBXKey(type, username) {
+  try {
+    const res = await nodeFetch(
+      `${RBX_KEY_API_URL}/generate?token=${RBX_KEY_ADMIN_TOKEN}&type=${type}&user=${encodeURIComponent(username)}`,
+      { method: "GET" }
+    );
+    const data = await res.json();
+    return data.success ? data.key : null;
+  } catch (err) {
+    console.error("[RBX KEY] Erro ao gerar key:", err.message);
+    return null;
+  }
+}
+
 // ===================== CONSTANTES =====================
 // — Roblox Update Checker
 const CONFIG_FILE      = "./config.json";
@@ -356,11 +374,17 @@ new SlashCommandBuilder()
     .setName("creategiveaway")
     .setDescription("Cria um giveaway")
     .addStringOption(o => o.setName("prize").setDescription("Premio oferecido (ex: 1 mes Premium)").setRequired(true))
+    .addStringOption(o => o.setName("keytype").setDescription("Tipo de key RBX")
+      .setRequired(true)
+      .addChoices(
+        { name: "RBX Key Premium 7 dias", value: "premium7" },
+        { name: "RBX Key Premium 30 dias", value: "premium30" },
+        { name: "RBX Key Premium Ilimitado", value: "premium" }
+      ))
     .addStringOption(o => o.setName("description").setDescription("Descricao adicional").setRequired(false))
     .addIntegerOption(o => o.setName("winners").setDescription("Numero de vencedores").setRequired(false))
     .addIntegerOption(o => o.setName("duration").setDescription("Duracao em minutos").setRequired(false))
-    .addAttachmentOption(o => o.setName("image").setDescription("Imagem do premio").setRequired(false))
-    .addAttachmentOption(o => o.setName("file").setDescription("Arquivo do premio").setRequired(false)),
+    .addAttachmentOption(o => o.setName("image").setDescription("Imagem do premio").setRequired(false)),
 
   new SlashCommandBuilder()
     .setName("serverstats")
@@ -1273,18 +1297,20 @@ client.on("interactionCreate", async (interaction) => {
 
       try {
         const prize = interaction.options.getString("prize");
+        const keytype = interaction.options.getString("keytype") || "premium30";
         const description = interaction.options.getString("description");
         const winners = interaction.options.getInteger("winners") || 1;
         const duration = interaction.options.getInteger("duration") || 60;
         const image = interaction.options.getAttachment("image");
-        const file = interaction.options.getAttachment("file");
 
         const participantes = new Set();
         const endTime = Date.now() + duration * 60 * 1000;
 
+        const keyTypeNames = { premium7: "7 dias", premium30: "30 dias", premium: "Ilimitado" };
+        
         const embed = new EmbedBuilder()
           .setTitle("🎉 GIVEAWAY")
-          .setDescription(`**Premio:** ${prize}`)
+          .setDescription(`**Premio:** ${prize}\n\n🔑 Tipo: RBX Key ${keyTypeNames[keytype] || keytype}`)
           .addFields(
             { name: "Descricao", value: description || "Sem descricao", inline: false },
             { name: "Vencedores", value: winners.toString(), inline: true },
@@ -1305,20 +1331,38 @@ client.on("interactionCreate", async (interaction) => {
         await msg.react("✅");
 
         const filter = (reaction, user) => reaction.emoji.name === "✅" && !user.bot;
+        const timeLeft = () => Math.max(0, Math.floor((endTime - Date.now()) / 1000));
+        
         const collector = msg.createReactionCollector({ filter, time: duration * 60 * 1000 });
+
+        // Atualizar countdown a cada segundo
+        const countdownInterval = setInterval(() => {
+          const secondsLeft = timeLeft();
+          if (secondsLeft <= 0) {
+            clearInterval(countdownInterval);
+            return;
+          }
+          try {
+            embed.spliceFields(3, 1, { name: "Termina em", value: `<t:${Math.floor(endTime / 1000)}:R>`, inline: true });
+            msg.edit({ embeds: [embed] }).catch(() => {});
+          } catch (e) {}
+        }, 1000);
 
         collector.on("collect", (reaction, user) => {
           if (!participantes.has(user.id)) {
             participantes.add(user.id);
             embed.spliceFields(2, 1, { name: "Participantes", value: participantes.size.toString(), inline: true });
-            msg.edit({ embeds: [embed] });
+            msg.edit({ embeds: [embed] }).catch(() => {});
           }
         });
 
         collector.on("end", async () => {
+          clearInterval(countdownInterval);
+          
           if (participantes.size === 0) {
             embed.setDescription(`**Premio:** ${prize}\n\n❌ Sem participantes!`);
             embed.setColor(0xFF0000);
+            embed.spliceFields(3, 1, { name: "Status", value: "Encerrado!", inline: true });
             await msg.edit({ embeds: [embed], content: "❌ Giveaway encerrado sem participantes." });
             return;
           }
@@ -1334,15 +1378,27 @@ client.on("interactionCreate", async (interaction) => {
           const winnerMentions = winnersList.map(id => `<@${id}>`).join(", ");
           embed.setDescription(`**Premio:** ${prize}\n\n🎉 **Vencedor(es):** ${winnerMentions}`);
           embed.setColor(0x00FF00);
-          embed.spliceFields(3, 1, { name: "Terminado", value: "Encerrado!", inline: true });
+          embed.spliceFields(3, 1, { name: "Status", value: "Encerrado!", inline: true });
 
-          if (file) {
-            const fData = await nodeFetch(file.url).then(r => r.buffer());
-            await interaction.channel.send({ content: `🎉 Parabens ${winnerMentions}! voce(s) ganhou(ram) ${prize}!`, files: [new AttachmentBuilder(fData, { name: file.name })] });
-          } else {
-            await interaction.channel.send({ content: `🎉 Parabens ${winnerMentions}! voce(s) ganhou(ram) ${prize}!` });
+          // Enviar key para cada vencedor por DM
+          for (const winnerId of winnersList) {
+            try {
+              const winnerUser = await interaction.client.users.fetch(winnerId);
+              if (winnerUser) {
+                const key = await generateRBXKey(keytype, winnerUser.username);
+                if (key) {
+                  await winnerUser.send(`🎉 **Parabens!** Voce ganhou **${prize}**!\n\n\`\`\`${key}\`\`\`\n\nCopie e use no executor!`);
+                  console.log(`[GIVEAWAY] Key enviada para ${winnerUser.tag}: ${key}`);
+                } else {
+                  await winnerUser.send(`🎉 **Parabens!** Voce ganhou **${prize}**!\n\nDesculpe, ocorreu um erro ao gerar a key. Fale com um admin.`);
+                }
+              }
+            } catch (e) {
+              console.error(`[GIVEAWAY] Erro ao enviar DM para ${winnerId}:`, e.message);
+            }
           }
-          await msg.edit({ embeds: [embed] });
+
+          await msg.edit({ embeds: [embed], content: "🎉 Giveaway encerrado!" });
         });
 
         return interaction.editReply({ content: "✅ Giveaway criado!" });
