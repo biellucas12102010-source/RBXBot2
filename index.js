@@ -412,6 +412,33 @@ new SlashCommandBuilder()
     .addIntegerOption(o => o.setName("tempo").setDescription("Tempo em minutos").setRequired(false)),
 
   new SlashCommandBuilder()
+    .setName("darkey")
+    .setDescription("Envia uma RBX Key por DM diretamente a um usuário")
+    .addUserOption(o => o.setName("usuario").setDescription("Usuário que receberá a key").setRequired(true))
+    .addStringOption(o =>
+      o.setName("keytype").setDescription("Tipo de key").setRequired(true)
+       .addChoices(
+         { name: "Premium Ilimitado", value: "premium"   },
+         { name: "Premium 30 dias",   value: "premium30" },
+         { name: "Premium 7 dias",    value: "premium7"  },
+         { name: "Free Ilimitado",    value: "free_unlimited" },
+         { name: "Free 30 dias",      value: "free30"    },
+         { name: "Free 7 dias",       value: "free7"     },
+         { name: "Free 24h",          value: "free"      }
+       )
+    )
+    .addStringOption(o => o.setName("motivo").setDescription("Motivo (opcional, só para log)").setRequired(false)),
+
+  new SlashCommandBuilder()
+    .setName("notifyupdate")
+    .setDescription("Publica um aviso de update simplificado (sem download/fixer)")
+    .addStringOption(o => o.setName("name").setDescription("Nome do utilitário").setRequired(true))
+    .addStringOption(o => o.setName("version").setDescription("Nova versão").setRequired(true))
+    .addStringOption(o => o.setName("subtitle").setDescription("Subtítulo").setRequired(true))
+    .addStringOption(o => o.setName("log").setDescription("Log de update (| = 1 linha, |-| = 2 linhas)").setRequired(true))
+    .addStringOption(o => o.setName("notes").setDescription("Notas adicionais (opcional)").setRequired(false)),
+
+  new SlashCommandBuilder()
     .setName("test")
     .setDescription("Testa o /update e /annunciament com dados de exemplo"),
 
@@ -1227,6 +1254,127 @@ client.on("interactionCreate", async (interaction) => {
       }
     }
 
+    // ─── darkey ───
+    if (commandName === "darkey") {
+      const DARKEY_ROLE = "1109671454473203738";
+      const isOwner = interaction.guild.ownerId === interaction.user.id;
+      const hasRole = interaction.member.roles.cache.has(DARKEY_ROLE);
+      if (!isOwner && !hasRole)
+        return interaction.reply({ content: "❌ Sem permissão.", ephemeral: true });
+
+      await interaction.deferReply({ flags: 64 });
+
+      try {
+        const target  = interaction.options.getUser("usuario");
+        const keytype = interaction.options.getString("keytype");
+        const motivo  = interaction.options.getString("motivo") || "—";
+
+        const key = await generateRBXKey(keytype, target.username);
+        if (!key) {
+          return interaction.editReply({ content: "❌ Falha ao gerar a key. Verifique a API." });
+        }
+
+        const keyTypeNames = {
+          premium: "Premium Ilimitado", premium30: "Premium 30 dias", premium7: "Premium 7 dias",
+          free_unlimited: "Free Ilimitado", free30: "Free 30 dias", free7: "Free 7 dias", free: "Free 24h"
+        };
+
+        const dmMsg =
+`Olá ${target.username} 👋
+
+O administrador **${interaction.user.username}** enviou uma key para você!
+
+🔑 **Tipo:** ${keyTypeNames[keytype] || keytype}
+
+\`\`\`
+${key}
+\`\`\`
+
+**📖 Como usar:**
+
+**Conta nova:**
+> Abra o executor
+> Aperta **Registrar**
+> Coloca seu Email, Senha e Nome
+> No campo Key coloca a key acima e aperta **Criar Conta**
+
+**Se você já tem conta:**
+> Abre o executor → tab **Settings**
+> Role até o final → **Troca Key**
+> Cole a key acima e confirme ✅`;
+
+        try {
+          await target.send(dmMsg);
+        } catch {
+          return interaction.editReply({ content: `❌ Não consegui enviar DM para ${target}. O usuário pode ter DMs desativadas.` });
+        }
+
+        console.log(`[/darkey] Key ${key} (${keytype}) enviada para ${target.tag} por ${interaction.user.tag}. Motivo: ${motivo}`);
+        return interaction.editReply({
+          content: `✅ Key \`${key}\` (${keyTypeNames[keytype]}) enviada por DM para ${target}.\n> Motivo: ${motivo}`
+        });
+      } catch (err) {
+        console.error("[/darkey ERROR]", err);
+        return interaction.editReply({ content: `❌ Erro: \`${err.message}\`` });
+      }
+    }
+
+    // ─── notifyupdate ───
+    if (commandName === "notifyupdate") {
+      const UPDATE_ALLOWED_ROLE = "1109671454473203738";
+      const isOwner = interaction.guild.ownerId === interaction.user.id;
+      const hasRole = interaction.member.roles.cache.has(UPDATE_ALLOWED_ROLE);
+      if (!isOwner && !hasRole)
+        return interaction.reply({ content: "❌ Sem permissão.", ephemeral: true });
+
+      await interaction.deferReply({ flags: 64 });
+
+      try {
+        const name     = interaction.options.getString("name");
+        const version  = interaction.options.getString("version");
+        const subtitle = interaction.options.getString("subtitle");
+        const logRaw   = interaction.options.getString("log");
+        const notes    = interaction.options.getString("notes");
+
+        const parseLog = (raw) => raw.split("|-|").join("\n\n").split("|").join("\n");
+
+        const logText      = parseLog(logRaw);
+        const subtitleText = parseLog(subtitle);
+
+        const changelogBlock =
+          `\`\`\`ini\n` +
+          `[${name}] [>]:Update/Fixed/Improved\n` +
+          `[+]:Add\n` +
+          `[-]:Removed\n` +
+          `[*]:Trade\n` +
+          `[/]:Reveted\n\n` +
+          `${logText}\n` +
+          `\`\`\``;
+
+        const embed = new EmbedBuilder()
+          .setTitle(`${name} — Update to Version ${version}`)
+          .setColor(0x5865F2)
+          .setDescription(
+            `\`\`\`\n${subtitleText}\n\`\`\`\n\n` +
+            `**Changelog**\n${changelogBlock}\n` +
+            (notes ? `\n**Notes:** ${parseLog(notes)}\n` : "") +
+            `\nPra quem ja tem instalado (Reabra o RBXLauncher para o Update) For those who already have it installed (Reopen RBXLauncher for the Update)`
+          )
+          .setFooter({ text: "RBX EXPLOIT Update Log" })
+          .setTimestamp();
+
+        await interaction.channel.send({
+          content: `@everyone`,
+          embeds: [embed],
+          allowedMentions: { parse: ["everyone"] },
+        });
+        return interaction.editReply({ content: "✅ Update publicado!" });
+      } catch (err) {
+        console.error("[/notifyupdate ERROR]", err);
+        return interaction.editReply({ content: `❌ Erro: \`${err.message}\`` });
+      }
+    }
+
     // ─── annunciament ───
     if (commandName === "annunciament") {
       const ANNUNCIAMENT_ROLE_ID = "1109671454473203738";
@@ -1599,7 +1747,7 @@ Faça Bom Proveito 😄
         .setColor(0x5865F2)
         .addFields(
           { name: "🎮 Roblox",    value: "`/manage-notification` `/current-version` `/update-roblox`", inline: false },
-          { name: "📢 Logs & Anuncios", value: "`/update` `/annunciament` `/logapp` `/creategiveaway`", inline: false },
+          { name: "📢 Logs & Anuncios", value: "`/update` `/notifyupdate` `/annunciament` `/logapp` `/creategiveaway` `/darkey`", inline: false },
           { name: "⚙️ Utilidades", value: "`/serverstats` `/status` `/status-redux` `/dashboard` `/execdownload`", inline: false },
           { name: "🎭 Interativos", value: "`/poll` `/autorole`", inline: false },
           { name: "🛠️ Moderação", value: "`/pin` `/cleaner` `/reduxstatesexecutor` `/sync`", inline: false },
