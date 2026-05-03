@@ -1394,7 +1394,37 @@ client.on("interactionCreate", async (interaction) => {
               if (winnerUser) {
                 const key = await generateRBXKey(keytype, winnerUser.username);
                 if (key) {
-                  await winnerUser.send(`🎉 **Parabens!** Voce ganhou **${prize}**!\n\n\`\`\`${key}\`\`\`\n\nCopie e use no executor!`);
+                  const dmMsg =
+`Olá Sr(Sra) <@${winnerUser.id}> 👋
+
+Você concorreu a um Giveaway, valendo: **${prize}**
+
+e um dos vencedores foi você: <@${winnerUser.id}> 🎉
+
+Criador: **${interaction.user.username}**
+
+Aqui está sua Key que vc concorreu:
+\`\`\`
+${key}
+\`\`\`
+
+Faça Bom Proveito 😄
+
+**📖 Tutorial**
+
+**Conta nova:**
+> Abra o executor
+> Aperta **Registrar**
+> Coloca seu Email, Senha, Nome *(obrigatório)* e a foto *(opcional)*
+> No final coloca a sua Key e aperta **Cria Conta**
+> E pronto ✅
+
+**Se você já tiver conta criada, faz isso 👇**
+> Abre o executor
+> Vai na tab **Settings**
+> Rola até o final
+> Aperta **Troca Key** e coloca a sua Key nova`;
+                  await winnerUser.send(dmMsg);
                   console.log(`[GIVEAWAY] Key enviada para ${winnerUser.tag}: ${key}`);
                 } else {
                   await winnerUser.send(`🎉 **Parabens!** Voce ganhou **${prize}**!\n\nDesculpe, ocorreu um erro ao gerar a key. Fale com um admin.`);
