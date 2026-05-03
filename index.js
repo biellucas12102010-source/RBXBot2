@@ -1640,8 +1640,6 @@ client.on("interactionCreate", async (interaction) => {
       return interaction.update({ content: "Escolha uma plataforma:", embeds: [], components: [row, backRow] });
     }
   }
-
-  }
 });
 
 // ===================== REACTION HANDLER (auto-role + poll) =====================
