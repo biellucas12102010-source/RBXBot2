@@ -1219,7 +1219,7 @@ client.on("interactionCreate", async (interaction) => {
 
         const changelogBlock =
           `\`\`\`ini\n` +
-          `[${name} v${version}]`
+          `[${name} v${version}]` +
           `[>]:Update/Fixed/Improved\n` +
           `[+]:Add\n` +
           `[-]:Removed\n` +
@@ -1344,7 +1344,7 @@ ${key}
 
         const changelogBlock =
           `\`\`\`ini\n` +
-          `[${name} v${version}]` 
+          `[${name} v${version}]` +
           `[>]:Update/Fixed/Improved\n` +
           `[+]:Add\n` +
           `[-]:Removed\n` +
