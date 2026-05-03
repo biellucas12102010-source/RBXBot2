@@ -1343,7 +1343,8 @@ ${key}
 
         const changelogBlock =
           `\`\`\`ini\n` +
-          `[${name}] [>]:Update/Fixed/Improved\n` +
+          `[${name} v${version}]` 
+          `[>]:Update/Fixed/Improved\n` +
           `[+]:Add\n` +
           `[-]:Removed\n` +
           `[*]:Trade\n` +
