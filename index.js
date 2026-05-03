@@ -1066,8 +1066,16 @@ client.on("interactionCreate", async (interaction) => {
       const qty = Math.min(Math.max(interaction.options.getInteger("quantidade") || 100, 1), 1000);
       await interaction.deferReply({ ephemeral: true });
       try {
-        const msgs  = await interaction.channel.bulkDelete(qty, true);
-        try { await interaction.user.send(`🧹 **Limpeza concluída!** Canal: **#${interaction.channel.name}** — ${msgs.size} mensagens apagadas.`); } catch {}
+        let deleted = 0;
+        let remaining = qty;
+        while (remaining > 0) {
+          const batch = Math.min(remaining, 100);
+          const msgs = await interaction.channel.bulkDelete(batch, true);
+          deleted += msgs.size;
+          remaining -= batch;
+          if (msgs.size < batch) break; // nao ha mais mensagens
+        }
+        try { await interaction.user.send(`🧹 **Limpeza concluída!** Canal: **#${interaction.channel.name}** — ${deleted} mensagens apagadas.`); } catch {}
         return interaction.editReply({ content: `✅ ${msgs.size} mensagens apagadas.` });
       } catch (e) {
         console.error("[/cleaner ERROR]", e);
@@ -1259,11 +1267,13 @@ client.on("interactionCreate", async (interaction) => {
         if (video || file) {
           const files = [];
           if (video) {
-            const vData = await nodeFetch(video.url).then(r => r.buffer());
+            const vRes = await nodeFetch(video.url);
+            const vData = Buffer.from(await vRes.arrayBuffer());
             files.push(new AttachmentBuilder(vData, { name: video.name }));
           }
           if (file) {
-            const fData = await nodeFetch(file.url).then(r => r.buffer());
+            const fRes = await nodeFetch(file.url);
+            const fData = Buffer.from(await fRes.arrayBuffer());
             files.push(new AttachmentBuilder(fData, { name: file.name }));
           }
           await interaction.channel.send({
@@ -1332,22 +1342,10 @@ client.on("interactionCreate", async (interaction) => {
         await msg.react("✅");
 
         const filter = (reaction, user) => reaction.emoji.name === "✅" && !user.bot;
-        const timeLeft = () => Math.max(0, Math.floor((endTime - Date.now()) / 1000));
         
         const collector = msg.createReactionCollector({ filter, time: duration * 60 * 1000 });
 
-        // Atualizar countdown a cada segundo
-        const countdownInterval = setInterval(() => {
-          const secondsLeft = timeLeft();
-          if (secondsLeft <= 0) {
-            clearInterval(countdownInterval);
-            return;
-          }
-          try {
-            embed.spliceFields(3, 1, { name: "Termina em", value: `<t:${Math.floor(endTime / 1000)}:R>`, inline: true });
-            msg.edit({ embeds: [embed] }).catch(() => {});
-          } catch (e) {}
-        }, 1000);
+        // O Discord atualiza <t:...:R> automaticamente — sem necessidade de interval
 
         collector.on("collect", (reaction, user) => {
           if (!participantes.has(user.id)) {
@@ -1358,13 +1356,21 @@ client.on("interactionCreate", async (interaction) => {
         });
 
         collector.on("end", async () => {
-          clearInterval(countdownInterval);
-          
           if (participantes.size === 0) {
-            embed.setDescription(`**Premio:** ${prize}\n\n❌ Sem participantes!`);
-            embed.setColor(0xFF0000);
-            embed.spliceFields(3, 1, { name: "Status", value: "Encerrado!", inline: true });
-            await msg.edit({ embeds: [embed], content: "❌ Giveaway encerrado sem participantes." });
+            const endEmbed = new EmbedBuilder()
+              .setTitle("🎉 GIVEAWAY")
+              .setDescription(`**Premio:** ${prize}\n\n❌ Sem participantes!`)
+              .addFields(
+                { name: "Descricao", value: description || "Sem descricao", inline: false },
+                { name: "Vencedores", value: winners.toString(), inline: true },
+                { name: "Participantes", value: "0", inline: true },
+                { name: "Status", value: "Encerrado!", inline: true }
+              )
+              .setColor(0xFF0000)
+              .setFooter({ text: `Criado por ${interaction.user.tag}` })
+              .setTimestamp();
+            if (image) endEmbed.setImage(image.url);
+            await msg.edit({ embeds: [endEmbed], content: "❌ Giveaway encerrado sem participantes." });
             return;
           }
 
@@ -1635,39 +1641,54 @@ client.on("interactionCreate", async (interaction) => {
     }
   }
 
-  // ── REACTION COLLECTOR ──
-  else if (interaction.isMessageReactionAdd()) {
-    const message = interaction.message;
-    const user = interaction.user;
+  }
+});
 
-    const autoRole = collectorMap.get(message.id);
-    if (autoRole) {
+// ===================== REACTION HANDLER (auto-role + poll) =====================
+client.on("messageReactionAdd", async (reaction, user) => {
+  if (user.bot) return;
+
+  // Fetch partial reaction/message if needed
+  if (reaction.partial) {
+    try { await reaction.fetch(); } catch { return; }
+  }
+  if (reaction.message.partial) {
+    try { await reaction.message.fetch(); } catch { return; }
+  }
+
+  const message = reaction.message;
+
+  // ── Auto-role ──
+  const autoRole = collectorMap.get(message.id);
+  if (autoRole && reaction.emoji.name === autoRole.emoji) {
+    try {
       const role = message.guild.roles.cache.get(autoRole.roleId);
       if (role) {
         const member = await message.guild.members.fetch(user.id);
         await member.roles.add(role);
       }
-    }
+    } catch (e) { console.error("[AUTO-ROLE ERROR]", e.message); }
+  }
 
-    const poll = pollMap.get(message.id);
-    if (poll) {
-      const emoji = interaction._emoji.name;
-      const emojis = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"];
-      const index = emojis.indexOf(emoji);
-      if (index !== -1 && index < poll.options.length) {
-        if (poll.voters.has(user.id)) {
-          const oldIndex = poll.voters.get(user.id);
-          poll.votes[oldIndex]--;
-        }
-        poll.votes[index]++;
-        poll.voters.set(user.id, index);
-
-        const optionText = poll.options.map((opt, i) => `${emojis[i]} ${opt}: ${poll.votes[i]} votos`).join("\n");
-        const embed = new EmbedBuilder(message.embeds[0].data)
-          .setDescription(`**${poll.question}**\n\n${optionText}`)
-          .setFooter({ text: `Votos: ${poll.voters.size}` });
-        await message.edit({ embeds: [embed] });
+  // ── Poll ──
+  const poll = pollMap.get(message.id);
+  if (poll) {
+    const emoji = reaction.emoji.name;
+    const emojis = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"];
+    const index = emojis.indexOf(emoji);
+    if (index !== -1 && index < poll.options.length) {
+      if (poll.voters.has(user.id)) {
+        const oldIndex = poll.voters.get(user.id);
+        poll.votes[oldIndex]--;
       }
+      poll.votes[index]++;
+      poll.voters.set(user.id, index);
+
+      const optionText = poll.options.map((opt, i) => `${emojis[i]} ${opt}: ${poll.votes[i]} votos`).join("\n");
+      const embed = new EmbedBuilder(message.embeds[0].data)
+        .setDescription(`**${poll.question}**\n\n${optionText}`)
+        .setFooter({ text: `Votos: ${poll.voters.size}` });
+      await message.edit({ embeds: [embed] }).catch(() => {});
     }
   }
 });
