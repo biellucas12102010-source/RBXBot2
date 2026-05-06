@@ -784,7 +784,7 @@ client.on("interactionCreate", async (interaction) => {
             ]);
             const fv = futureData?.[platform];
             const cv = currentData?.[platform];
-            if (!fv || fv === cv)
+            if (!fv || fv === cv || !fv.includes(".") || fv.toLowerCase().includes("hidden"))
               return interaction.editReply(`❌ Não há future update para "${platform}".`);
             version = fv;
           } else {
