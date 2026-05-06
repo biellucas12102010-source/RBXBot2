@@ -492,6 +492,27 @@ client.once("ready", async () => {
     await logChannel.send({ content: `<@&${LOG_ROLE_ID}>`, embeds: [embed], allowedMentions: { roles: [LOG_ROLE_ID] } });
   }
 
+  // Enviar embed de startup no PV do criador
+  try {
+    const creator = await client.users.fetch("1201287957118722068");
+    if (creator) {
+      const dmEmbed = new EmbedBuilder()
+        .setTitle("✅ RBX-BOT Iniciado!")
+        .setDescription("O bot foi ligado e está funcionando normalmente.")
+        .addFields(
+          { name: "🤖 Tag", value: client.user.tag, inline: true },
+          { name: "🟢 Status", value: "Online", inline: true },
+          { name: "⏰ Horário", value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: false }
+        )
+        .setColor(0x00FF00)
+        .setThumbnail(client.user.displayAvatarURL())
+        .setTimestamp();
+      await creator.send({ embeds: [dmEmbed] });
+    }
+  } catch (err) {
+    console.warn("[STARTUP DM] Não foi possível enviar DM ao criador:", err.message);
+  }
+
   // Carregar mensagem de status Redux existente
   const statusChannel = await client.channels.fetch(REDUX_CHANNEL_ID).catch(() => null);
   if (statusChannel) {
