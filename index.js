@@ -1219,7 +1219,7 @@ client.on("interactionCreate", async (interaction) => {
 
         const changelogBlock =
           `\`\`\`ini\n` +
-          `[${name} v${version}]` +
+          `[${name} v${version} The ${name} Created for RBX Studios]\n` +
           `[>]:Update/Fixed/Improved\n` +
           `[+]:Add\n` +
           `[-]:Removed\n` +
@@ -1344,7 +1344,7 @@ ${key}
 
         const changelogBlock =
           `\`\`\`ini\n` +
-          `[${name} v${version}]` +
+          `[${name} v${version} The ${name} Created for RBX Studios]\n` +
           `[>]:Update/Fixed/Improved\n` +
           `[+]:Add\n` +
           `[-]:Removed\n` +
@@ -1936,6 +1936,7 @@ function startRobloxUpdateChecker() {
           if (platform !== "Windows" && platform !== "Mac") continue;
           const futureVersion = desktopFuture?.[platform];
           if (!futureVersion) continue;
+          if (!futureVersion.includes(".") || futureVersion.toLowerCase().includes("hidden")) continue;
           const lastF = cfg.lastFutureVersions[platform];
           if (!lastF) { cfg.lastFutureVersions[platform] = futureVersion; saveRbxConfig(); continue; }
           if (lastF === futureVersion) continue;
