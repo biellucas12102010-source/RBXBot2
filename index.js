@@ -481,17 +481,6 @@ const LOG_ROLE_ID = "1109671454116687872";
 client.once("ready", async () => {
   console.log(`🤖 Online como ${client.user.tag}`);
 
-  // Enviar mensagem de online
-  const logChannel = await client.channels.fetch(LOG_CHANNEL_ID).catch(() => null);
-  if (logChannel) {
-    const embed = new EmbedBuilder()
-      .setTitle("🤖 RBX-BOT Online")
-      .setDescription("O bot esta 🟢 Online e funcionando!")
-      .setColor(0x00FF00)
-      .setTimestamp();
-    await logChannel.send({ content: `<@&${LOG_ROLE_ID}>`, embeds: [embed], allowedMentions: { roles: [LOG_ROLE_ID] } });
-  }
-
   // Enviar embed de startup no PV do criador
   try {
     const creator = await client.users.fetch("1201287957118722068");
