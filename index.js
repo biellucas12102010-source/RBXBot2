@@ -784,8 +784,8 @@ client.on("interactionCreate", async (interaction) => {
             ]);
             const fv = futureData?.[platform];
             const cv = currentData?.[platform];
-            if (!fv || fv === cv || !fv.includes(".") || fv.toLowerCase().includes("hidden"))
-              return interaction.editReply(`❌ Não há future update para "${platform}".`);
+            if (!fv || fv === cv || fv === "version-hidden")
+              return interaction.editReply(`❌ Não há future update disponível para "${platform}" no momento.`);
             version = fv;
           } else {
             const data = await fetchDesktopVersions(false);
@@ -1936,7 +1936,7 @@ function startRobloxUpdateChecker() {
           if (platform !== "Windows" && platform !== "Mac") continue;
           const futureVersion = desktopFuture?.[platform];
           if (!futureVersion) continue;
-          if (!futureVersion.includes(".") || futureVersion.toLowerCase().includes("hidden")) continue;
+          if (futureVersion === "version-hidden") continue;
           const lastF = cfg.lastFutureVersions[platform];
           if (!lastF) { cfg.lastFutureVersions[platform] = futureVersion; saveRbxConfig(); continue; }
           if (lastF === futureVersion) continue;
