@@ -17,15 +17,12 @@ const {
   SlashCommandBuilder,
   REST,
   Routes,
-  Collection,
-  PermissionsBitField,
   AttachmentBuilder,
   ChannelType,
 } = require("discord.js");
 
 const fs        = require("fs");
 const fsPromise = require("fs").promises;
-const path      = require("path");
 const express   = require("express");
 const nodeFetch = require("node-fetch").default;
 const cheerio   = require("cheerio");
@@ -35,18 +32,9 @@ const TOKEN      = process.env.TOKEN_BOT;
 const CLIENT_ID  = process.env.Application_ID;
 const GUILD_ID   = process.env.GUILD_ID;
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const FREETHEAI_API_KEY = process.env.FREETHEAI_API_KEY;
-const AI_PROVIDER = GEMINI_API_KEY ? "gemini" : (FREETHEAI_API_KEY ? "freetheai" : null);
-
 if (!TOKEN)     { console.error("❌ TOKEN_BOT não encontrado no .env"); process.exit(1); }
 if (!CLIENT_ID) { console.error("❌ Application_ID não encontrado no .env"); process.exit(1); }
 if (!GUILD_ID)  { console.error("❌ GUILD_ID não encontrado no .env"); process.exit(1); }
-if (!AI_PROVIDER) { console.warn("⚠️ API key não encontrada no .env — IA no PV desativada."); }
-
-// Histórico de conversa por usuário no PV (mantido em memória)
-const dmConversations = new Map(); // userId -> [{ role, content }]
-const DM_MAX_HISTORY  = 20;
 
 const collectorMap = new Map();
 const pollMap = new Map();
@@ -122,13 +110,10 @@ const client = new Client({
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildMembers,
     GatewayIntentBits.DirectMessages,
-    GatewayIntentBits.DirectMessageTyping,
     GatewayIntentBits.GuildMessageReactions,
   ],
   partials: [Partials.Channel, Partials.Message, Partials.Reaction],
 });
-
-client.commands = new Collection();
 
 // ===================== XP HELPERS =====================
 async function loadXP() {
@@ -518,123 +503,18 @@ client.once("ready", async () => {
   await startReduxStatusWatcher();
 });
 
-// ===================== XP POR MENSAGEM + IA NO PV =====================
+// ===================== XP POR MENSAGEM =====================
 client.on("messageCreate", async (message) => {
-  console.log(`[MSG RAW] guild=${message.guildId ?? "DM"} | autor=${message.author?.tag} | bot=${message.author?.bot} | partial=${message.partial}`);
-
   if (message.partial) {
     try { await message.fetch(); } catch { return; }
   }
 
   if (message.author.bot) return;
 
-  // ── IA no PV ──
+  // Ignorar DMs
   if (!message.guild) {
-    console.log(`[DM] Mensagem recebida de ${message.author.tag}: ${message.content}`);
-    console.log(`[DM] AI_PROVIDER: ${AI_PROVIDER}`);
-    if (!AI_PROVIDER) {
-      console.warn("[DM] API key não definida — ignorando.");
-      return;
-    }
-
-    const userId    = message.author.id;
-    const userInput = message.content.trim();
-    
-    // Verificar se tem anexos/imagens
-    if (message.attachments.size > 0) {
-      await message.reply("Desculpe, no momento nao consigo processar imagens. Por favor, envie apenas texto!");
-      return;
-    }
-    
-    if (!userInput) return;
-
-    await message.channel.sendTyping();
-
-    if (!dmConversations.has(userId)) dmConversations.set(userId, []);
-    const history = dmConversations.get(userId);
-
-      // Limpar history para formato correto
-      const cleanHistory = history.length === 0 
-        ? [] 
-        : history.filter(m => m.role && m.parts && m.parts[0] && m.parts[0].text);
-
-      cleanHistory.push({ role: "user", parts: [{ text: userInput }] });
-      while (cleanHistory.length > DM_MAX_HISTORY) cleanHistory.shift();
-
-      const systemPrompt = `Você é o assistente oficial do RBX-BOT, um bot do Discord focado em executores do Roblox e novidades da plataforma Roblox.
-Responda sempre em português do Brasil, de forma amigável, direta e útil.
-Você conhece sobre executores como Xeno, Solara, Wave, Ronix, Delta (mobile), e sobre updates do Roblox para Windows, Mac, Android e iOS.
-Se o usuário perguntar algo fora do contexto de Roblox, responda normalmente como um assistente geral.
-Nunca diga que é uma IA — diga apenas que é o assistente do RBX-BOT.`;
-
-      try {
-        let res, data, reply;
-
-        if (AI_PROVIDER === "gemini") {
-          // Usar Gemini
-          res = await nodeFetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                system_instruction: { parts: [{ text: systemPrompt }] },
-                contents: cleanHistory,
-              }),
-            }
-          );
-          data = await res.json();
-          reply = data.candidates?.[0]?.content?.parts?.[0]?.text;
-        } else {
-          // Usar FreeTheAi
-          const FREETHEAI_API_KEY = process.env.FREETHEAI_API_KEY;
-          res = await nodeFetch(
-            "https://api.freetheai.xyz/v1/chat/completions",
-            {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                "Authorization": `Bearer ${FREETHEAI_API_KEY}`,
-              },
-              body: JSON.stringify({
-                model: "google/gemini-2.0-flash",
-                messages: [
-                  { role: "system", content: systemPrompt },
-                  ...cleanHistory.map(m => ({ role: m.role, content: m.parts[0].text }))
-                ],
-              }),
-            }
-          );
-          data = await res.json();
-          reply = data.choices?.[0]?.message?.content;
-        }
-
-        if (!res.ok) {
-          const err = await res.text();
-          console.error("[IA DM ERROR]", err);
-          return message.reply("❌ Erro ao processar sua mensagem. Tente novamente mais tarde.");
-        }
-
-        if (!reply) {
-          return message.reply("❌ Não consegui gerar uma resposta.");
-        }
-
-        // Salva resposta no histórico
-        history.push({ role: "model", parts: [{ text: reply }] });
-        while (history.length > DM_MAX_HISTORY) history.shift();
-
-        if (reply.length <= 2000) {
-          await message.reply(reply);
-        } else {
-          const chunks = reply.match(/.{1,2000}/gs) || [];
-          for (const chunk of chunks) await message.channel.send(chunk);
-        }
-      } catch (err) {
-        console.error("[IA DM FETCH ERROR]", err);
-        await message.reply("❌ Ocorreu um erro interno. Tente novamente.");
-      }
-      return;
-    }
+    return;
+  }
 
   // ── XP em servidor ──
   const data = await loadXP();
@@ -1113,7 +993,7 @@ client.on("interactionCreate", async (interaction) => {
           if (msgs.size < batch) break; // nao ha mais mensagens
         }
         try { await interaction.user.send(`🧹 **Limpeza concluída!** Canal: **#${interaction.channel.name}** — ${deleted} mensagens apagadas.`); } catch {}
-        return interaction.editReply({ content: `✅ ${msgs.size} mensagens apagadas.` });
+        return interaction.editReply({ content: `✅ ${deleted} mensagens apagadas.` });
       } catch (e) {
         console.error("[/cleaner ERROR]", e);
         return interaction.editReply({ content: `❌ Erro: \`${e}\`` });
@@ -1467,94 +1347,95 @@ ${key}
       await interaction.deferReply({ flags: 64 });
 
       try {
-        const prize = interaction.options.getString("prize");
-        const keytype = interaction.options.getString("keytype") || "premium30";
+        const prize       = interaction.options.getString("prize");
+        const keytype     = interaction.options.getString("keytype") || "premium30";
         const description = interaction.options.getString("description");
-        const winners = interaction.options.getInteger("winners") || 1;
-        const duration = interaction.options.getInteger("duration") || 60;
-        const image = interaction.options.getAttachment("image");
+        const winners     = interaction.options.getInteger("winners") || 1;
+        const duration    = interaction.options.getInteger("duration") || 60;
+        const image       = interaction.options.getAttachment("image");
 
         const participantes = new Set();
         const endTime = Date.now() + duration * 60 * 1000;
 
         const keyTypeNames = { premium7: "7 dias", premium30: "30 dias", premium: "Ilimitado" };
-        
-        const embed = new EmbedBuilder()
-          .setTitle("🎉 GIVEAWAY")
-          .setDescription(`**Premio:** ${prize}\n\n🔑 Tipo: RBX Key ${keyTypeNames[keytype] || keytype}`)
-          .addFields(
-            { name: "Descricao", value: description || "Sem descricao", inline: false },
-            { name: "Vencedores", value: winners.toString(), inline: true },
-            { name: "Participantes", value: "0", inline: true },
-            { name: "Termina em", value: `<t:${Math.floor(endTime / 1000)}:R>`, inline: true }
-          )
-          .setColor(0xFFD700)
-          .setFooter({ text: `Criado por ${interaction.user.tag}` })
-          .setTimestamp();
 
-        if (image) embed.setImage(image.url);
+        const buildEmbed = (extra = {}) => {
+          const e = new EmbedBuilder()
+            .setTitle("🎉 GIVEAWAY")
+            .setDescription(`**Premio:** ${prize}\n\n🔑 Tipo: RBX Key ${keyTypeNames[keytype] || keytype}`)
+            .addFields(
+              { name: "Descricao",    value: description || "Sem descricao",                    inline: false },
+              { name: "Vencedores",  value: winners.toString(),                                  inline: true  },
+              { name: "Participantes", value: participantes.size.toString(),                     inline: true  },
+              { name: "Termina em",  value: extra.ended ? "Encerrado!" : `<t:${Math.floor(endTime / 1000)}:R>`, inline: true }
+            )
+            .setColor(extra.color || 0xFFD700)
+            .setFooter({ text: `Criado por ${interaction.user.tag}` })
+            .setTimestamp();
+          if (image) e.setImage(image.url);
+          if (extra.winnerMentions)
+            e.setDescription(`**Premio:** ${prize}\n\n🎉 **Vencedor(es):** ${extra.winnerMentions}`);
+          if (extra.noParticipants)
+            e.setDescription(`**Premio:** ${prize}\n\n❌ Sem participantes!`);
+          return e;
+        };
 
         const msg = await interaction.channel.send({
           content: "🎉 **GIVEAWAY!** Reaja com ✅ para participar!",
-          embeds: [embed],
+          embeds: [buildEmbed()],
         });
 
         await msg.react("✅");
 
         const filter = (reaction, user) => reaction.emoji.name === "✅" && !user.bot;
-        
         const collector = msg.createReactionCollector({ filter, time: duration * 60 * 1000 });
-
-        // O Discord atualiza <t:...:R> automaticamente — sem necessidade de interval
 
         collector.on("collect", (reaction, user) => {
           if (!participantes.has(user.id)) {
             participantes.add(user.id);
-            embed.spliceFields(2, 1, { name: "Participantes", value: participantes.size.toString(), inline: true });
-            msg.edit({ embeds: [embed] }).catch(() => {});
+            msg.edit({ embeds: [buildEmbed()] }).catch(() => {});
+          }
+        });
+
+        collector.on("remove", (reaction, user) => {
+          if (participantes.has(user.id)) {
+            participantes.delete(user.id);
+            msg.edit({ embeds: [buildEmbed()] }).catch(() => {});
           }
         });
 
         collector.on("end", async () => {
           if (participantes.size === 0) {
-            const endEmbed = new EmbedBuilder()
-              .setTitle("🎉 GIVEAWAY")
-              .setDescription(`**Premio:** ${prize}\n\n❌ Sem participantes!`)
-              .addFields(
-                { name: "Descricao", value: description || "Sem descricao", inline: false },
-                { name: "Vencedores", value: winners.toString(), inline: true },
-                { name: "Participantes", value: "0", inline: true },
-                { name: "Status", value: "Encerrado!", inline: true }
-              )
-              .setColor(0xFF0000)
-              .setFooter({ text: `Criado por ${interaction.user.tag}` })
-              .setTimestamp();
-            if (image) endEmbed.setImage(image.url);
-            await msg.edit({ embeds: [endEmbed], content: "❌ Giveaway encerrado sem participantes." });
+            await msg.edit({
+              embeds: [buildEmbed({ color: 0xFF0000, ended: true, noParticipants: true })],
+              content: "❌ Giveaway encerrado sem participantes.",
+            });
             return;
           }
 
+          // Sortear vencedores sem repetição
+          const pool = Array.from(participantes);
           const winnersList = [];
-          const partieArray = Array.from(participantes);
-          for (let i = 0; i < Math.min(winners, partieArray.length); i++) {
-            const randomIndex = Math.floor(Math.random() * partieArray.length);
-            winnersList.push(partieArray[randomIndex]);
-            partieArray.splice(randomIndex, 1);
+          for (let i = 0; i < Math.min(winners, pool.length); i++) {
+            const idx = Math.floor(Math.random() * pool.length);
+            winnersList.push(pool.splice(idx, 1)[0]);
           }
 
           const winnerMentions = winnersList.map(id => `<@${id}>`).join(", ");
-          embed.setDescription(`**Premio:** ${prize}\n\n🎉 **Vencedor(es):** ${winnerMentions}`);
-          embed.setColor(0x00FF00);
-          embed.spliceFields(3, 1, { name: "Status", value: "Encerrado!", inline: true });
+
+          await msg.edit({
+            embeds: [buildEmbed({ color: 0x00FF00, ended: true, winnerMentions })],
+            content: "🎉 Giveaway encerrado!",
+          });
 
           // Enviar key para cada vencedor por DM
           for (const winnerId of winnersList) {
             try {
               const winnerUser = await interaction.client.users.fetch(winnerId);
-              if (winnerUser) {
-                const key = await generateRBXKey(keytype, winnerUser.username);
-                if (key) {
-                  const dmMsg =
+              if (!winnerUser) continue;
+              const key = await generateRBXKey(keytype, winnerUser.username);
+              if (key) {
+                const dmMsg =
 `Olá Sr(Sra) <@${winnerUser.id}> 👋
 
 Você concorreu a um Giveaway, valendo: **${prize}**
@@ -1584,18 +1465,15 @@ Faça Bom Proveito 😄
 > Vai na tab **Settings**
 > Rola até o final
 > Aperta **Troca Key** e coloca a sua Key nova`;
-                  await winnerUser.send(dmMsg);
-                  console.log(`[GIVEAWAY] Key enviada para ${winnerUser.tag}: ${key}`);
-                } else {
-                  await winnerUser.send(`🎉 **Parabens!** Voce ganhou **${prize}**!\n\nDesculpe, ocorreu um erro ao gerar a key. Fale com um admin.`);
-                }
+                await winnerUser.send(dmMsg);
+                console.log(`[GIVEAWAY] Key enviada para ${winnerUser.tag}: ${key}`);
+              } else {
+                await winnerUser.send(`🎉 **Parabens!** Voce ganhou **${prize}**!\n\nDesculpe, ocorreu um erro ao gerar a key. Fale com um admin.`);
               }
             } catch (e) {
               console.error(`[GIVEAWAY] Erro ao enviar DM para ${winnerId}:`, e.message);
             }
           }
-
-          await msg.edit({ embeds: [embed], content: "🎉 Giveaway encerrado!" });
         });
 
         return interaction.editReply({ content: "✅ Giveaway criado!" });
