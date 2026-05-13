@@ -134,9 +134,9 @@ async function loadStatus() {
 // ===================== ROBLOX FETCH HELPERS =====================
 function getDownloadLink(platform, version) {
   if (platform === "Windows")
-    return `https://rdd.latte.to/?channel=${version}&binaryType=WindowsPlayer&version=${version}`;
+    return `https://rdd.latte.to/?channel=LIVE&binaryType=WindowsPlayer&version=${version}`;
   if (platform === "Mac")
-    return `https://rdd.latte.to/?channel=${version}&binaryType=MacPlayer&version=${version}`;
+    return `https://rdd.latte.to/?channel=LIVE&binaryType=MacPlayer&version=${version}`;
   if (platform === "Android")
     return "https://play.google.com/store/apps/details?id=com.roblox.client";
   if (platform === "iOS")
@@ -1781,24 +1781,30 @@ function startRobloxUpdateChecker() {
           if (cfg.platformsDisabled.includes(platform)) continue;
 
           // Current
-          let currentVersion =
-            platform === "Windows" || platform === "Mac" ? desktopCurrent?.[platform]
-            : platform === "iOS"     ? iosVersion
-            : androidVersion;
+          // Windows/Mac: WEAO (formato "version-xxxx")
+          // Android/iOS: WEAO primeiro, scraper proprio como fallback
+          let currentVersion;
+          if (platform === "Windows" || platform === "Mac") {
+            currentVersion = desktopCurrent?.[platform];
+          } else if (platform === "iOS") {
+            currentVersion = desktopCurrent?.[platform] || iosVersion;
+          } else {
+            currentVersion = desktopCurrent?.[platform] || androidVersion;
+          }
 
-          if (currentVersion && typeof currentVersion === "string" && currentVersion.includes(".")) {
+          if (currentVersion && typeof currentVersion === "string" && currentVersion.trim() !== "") {
             const last = cfg.lastVersions[platform];
-            if (!last) { 
-              cfg.lastVersions[platform] = currentVersion; 
-              saveRbxConfig(); 
+            if (!last) {
+              cfg.lastVersions[platform] = currentVersion;
+              saveRbxConfig();
               console.log(`[ROBLOX] Primeira versao ${platform}: ${currentVersion}`);
-              continue; 
-            }
-            if (last === currentVersion) {
-              console.log(`[ROBLOX] ${platform}: ${currentVersion} = ${last}, mesmo`);
               continue;
             }
-            
+            if (last === currentVersion) {
+              console.log(`[ROBLOX] ${platform}: sem mudanca (${currentVersion})`);
+              continue;
+            }
+
             console.log(`[ROBLOX] NOVA versao ${platform}: ${last} -> ${currentVersion}`);
             cfg.lastVersions[platform] = currentVersion;
             saveRbxConfig();
