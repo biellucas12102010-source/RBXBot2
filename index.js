@@ -40,7 +40,7 @@ const collectorMap = new Map();
 const pollMap = new Map();
 
 // RBX Key API
-const RBX_KEY_API_URL = process.env.RBX_KEY_API_URL || "https://rbxadminkey.netlify.app/api";
+const RBX_KEY_API_URL = process.env.RBX_KEY_API_URL || "https://rbxadminkey.onrender.com/api";
 const RBX_KEY_ADMIN_TOKEN = process.env.RBX_KEY_ADMIN_TOKEN || "redux-admin-secret";
 
 async function generateRBXKey(type, username) {
